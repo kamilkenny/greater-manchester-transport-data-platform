@@ -216,3 +216,10 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Project secrets and generated data
+.env
+data/raw/
+data/processed/
+*.zip
+.pytest_cache/
