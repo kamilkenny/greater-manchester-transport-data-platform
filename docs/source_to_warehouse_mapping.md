@@ -41,7 +41,7 @@ Grain: One version of a transport operator.
 
 | Source field | Target field | Transformation |
 |---|---|---|
-| agency_id | operator_business_id | Preserve as the natural identifier |
+| agency_id | agency_id | Trim spaces and preserve as the natural identifier |
 | agency_name | operator_name | Trim surrounding spaces |
 | agency_url | operator_url | Validate as an optional URL |
 | agency_timezone | operator_timezone | Standardise text |
@@ -49,7 +49,7 @@ Grain: One version of a transport operator.
 | agency_phone | operator_phone | Preserve as text |
 | agency_fare_url | fare_url | Validate as an optional URL |
 | agency_email | operator_email | Standardise case where appropriate |
-| agency_noc | national_operator_code | Preserve the TfGM extension |
+| agency_noc | agency_noc | Preserve the TfGM extension |
 
 History method: Type 2 history for changed operator details.
 

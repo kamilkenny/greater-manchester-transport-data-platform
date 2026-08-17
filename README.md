@@ -128,6 +128,22 @@ publications remain preserved in the raw layer, while approved history is
 promoted into the warehouse. A successful run marks the registered snapshot as
 `LOADED`.
 
+## Load core warehouse dimensions
+
+After all staging groups have loaded successfully, build the shared date
+dimension and the Type 2 operator dimension for that snapshot:
+
+```bash
+python -m transport_platform.warehouse.load_core_dimensions 1
+```
+
+The argument is the `snapshot_key` recorded in
+`governance.source_snapshot`. The set based SQL procedure validates that the
+snapshot has `LOADED` status, derives the complete published service date
+range, inserts missing calendar dates and maintains current and historical
+operator versions. Reprocessing the same snapshot does not duplicate date or
+operator rows. Each attempt is recorded in `governance.pipeline_run`.
+
 ## Data layers
 
 | Layer | Responsibility |
