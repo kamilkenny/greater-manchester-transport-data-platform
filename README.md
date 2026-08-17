@@ -61,6 +61,30 @@ The initialiser creates the configured local database when necessary and
 applies `sql/ddl/001` through `sql/ddl/011` in order. It is safe to run the
 current idempotent DDL scripts again.
 
+## Load GTFS reference staging
+
+The first staging loader registers an immutable source snapshot and loads
+`agency.txt`, `calendar.txt`, `calendar_dates.txt` and `feed_info.txt` in one
+audited transaction. It streams source records in bounded batches and does
+not load the complete files into memory.
+
+Find the latest preserved snapshot:
+
+```bash
+find data/raw/gtfs -type f -name '*.zip' | sort | tail -n 1
+```
+
+Pass that path to the loader:
+
+```bash
+python -m transport_platform.ingestion.load_reference_tables \
+  data/raw/gtfs/YYYY/MM/DD/tfgm_gtfs_TIMESTAMP_CHECKSUM.zip
+```
+
+Reprocessing the same checksum reuses its snapshot key and replaces only
+that snapshot's reference staging rows. Each attempt is recorded in
+`governance.pipeline_run`.
+
 ## Data layers
 
 | Layer | Responsibility |
