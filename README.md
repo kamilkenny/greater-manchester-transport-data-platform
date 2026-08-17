@@ -50,6 +50,11 @@ Start SQL Server Developer:
 docker compose up -d sqlserver
 ```
 
+The Compose configuration limits SQL Server to 2,048 MB by default, leaving
+memory available for Python, Docker and the Codespaces development services.
+Set `SQL_SERVER_MEMORY_LIMIT_MB` in `.env` only when the host has a different
+memory budget.
+
 Install the project and create the database objects:
 
 ```bash
@@ -99,6 +104,29 @@ The loader uses the same immutable snapshot registration, bounded batching,
 row hashing and pipeline auditing as the reference loader. Reprocessing the
 same snapshot replaces only its network staging rows and creates a new audit
 run.
+
+## Load GTFS high volume staging
+
+After the network tables succeed, load `stop_times.txt` and `shapes.txt` from
+the same preserved snapshot:
+
+```bash
+python -m transport_platform.ingestion.load_high_volume_tables \
+  data/raw/gtfs/YYYY/MM/DD/tfgm_gtfs_TIMESTAMP_CHECKSUM.zip
+```
+
+These files contain the largest staging datasets. The loader streams records
+through Microsoft's native TDS bulk copy protocol in bounded batches, without
+holding either complete file in memory. Each bulk batch uses its own database
+transaction. These two high volume staging tables are rolling work tables.
+Reprocessing truncates them before loading the selected immutable raw snapshot,
+so an interrupted attempt can be restarted without performing a multi million
+row delete. They retain only their sequential clustered lineage key during
+ingestion. Analytical secondary indexes are created on typed warehouse tables,
+not maintained across millions of raw staging writes. Historical source
+publications remain preserved in the raw layer, while approved history is
+promoted into the warehouse. A successful run marks the registered snapshot as
+`LOADED`.
 
 ## Data layers
 

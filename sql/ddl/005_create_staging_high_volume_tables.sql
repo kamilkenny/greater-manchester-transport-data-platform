@@ -63,66 +63,20 @@ BEGIN
     );
 END;
 
-IF NOT EXISTS (
-    SELECT 1
-    FROM sys.indexes
-    WHERE
-        name = N'IX_staging_stop_times_trip'
-        AND object_id = OBJECT_ID(N'staging.gtfs_stop_times')
-)
-BEGIN
-    CREATE INDEX IX_staging_stop_times_trip
-        ON staging.gtfs_stop_times (
-            snapshot_key,
-            trip_id,
-            stop_sequence
-        )
-        INCLUDE (
-            stop_id,
-            arrival_time,
-            departure_time
-        );
-END;
+/*
+High volume staging is loaded sequentially by snapshot and source row.
+Keep only the clustered lineage key during ingestion. Secondary indexes
+belong on typed warehouse tables, where their analytical benefit justifies
+their write and memory cost.
+*/
+DROP INDEX IF EXISTS IX_staging_stop_times_trip
+    ON staging.gtfs_stop_times;
 
-IF NOT EXISTS (
-    SELECT 1
-    FROM sys.indexes
-    WHERE
-        name = N'IX_staging_stop_times_stop'
-        AND object_id = OBJECT_ID(N'staging.gtfs_stop_times')
-)
-BEGIN
-    CREATE INDEX IX_staging_stop_times_stop
-        ON staging.gtfs_stop_times (
-            snapshot_key,
-            stop_id
-        )
-        INCLUDE (
-            trip_id,
-            stop_sequence
-        );
-END;
+DROP INDEX IF EXISTS IX_staging_stop_times_stop
+    ON staging.gtfs_stop_times;
 
-IF NOT EXISTS (
-    SELECT 1
-    FROM sys.indexes
-    WHERE
-        name = N'IX_staging_shapes_business_key'
-        AND object_id = OBJECT_ID(N'staging.gtfs_shapes')
-)
-BEGIN
-    CREATE INDEX IX_staging_shapes_business_key
-        ON staging.gtfs_shapes (
-            snapshot_key,
-            shape_id,
-            shape_pt_sequence
-        )
-        INCLUDE (
-            shape_pt_lat,
-            shape_pt_lon,
-            shape_dist_traveled
-        );
-END;
+DROP INDEX IF EXISTS IX_staging_shapes_business_key
+    ON staging.gtfs_shapes;
 
 SELECT
     schema_name(schema_id) AS schema_name,

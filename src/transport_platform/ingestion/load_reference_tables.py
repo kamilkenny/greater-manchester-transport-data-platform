@@ -297,10 +297,13 @@ def _start_pipeline_run(
 
 
 def _insert_table(
+    connection: Any,
     cursor: Any,
     archive: ZipFile,
     definition: TableLoadDefinition,
     snapshot_key: int,
+    batch_size: int = BATCH_SIZE,
+    commit_each_batch: bool = False,
 ) -> int:
     """Replace one snapshot partition and return its loaded row count."""
 
@@ -308,6 +311,8 @@ def _insert_table(
         f"DELETE FROM {definition.target_table} WHERE snapshot_key = ?;",
         snapshot_key,
     )
+    if commit_each_batch:
+        connection.commit()
 
     target_columns = (
         "snapshot_key",
@@ -326,11 +331,45 @@ def _insert_table(
     cursor.fast_executemany = True
     rows = iter_staging_rows(archive, definition, snapshot_key)
 
-    for batch in _batched(rows):
+    for batch in _batched(rows, batch_size=batch_size):
         cursor.executemany(insert_sql, batch)
         rows_loaded += len(batch)
+        if commit_each_batch:
+            connection.commit()
 
     return rows_loaded
+
+
+def _bulk_copy_table(
+    connection: Any,
+    cursor: Any,
+    archive: ZipFile,
+    definition: TableLoadDefinition,
+    snapshot_key: int,
+    batch_size: int,
+) -> int:
+    """Replace one rolling staging table through the native TDS protocol."""
+
+    cursor.execute(f"TRUNCATE TABLE {definition.target_table};")
+    connection.commit()
+
+    target_columns = [
+        "snapshot_key",
+        "source_row_number",
+        *definition.source_columns,
+        "row_hash",
+    ]
+    result = cursor.bulkcopy(
+        definition.target_table,
+        iter_staging_rows(archive, definition, snapshot_key),
+        batch_size=batch_size,
+        timeout=3600,
+        column_mappings=target_columns,
+        table_lock=True,
+        keep_nulls=True,
+        use_internal_transaction=True,
+    )
+    return int(result["rows_copied"])
 
 
 def load_staging_table_group(
@@ -338,6 +377,10 @@ def load_staging_table_group(
     definitions: Sequence[TableLoadDefinition],
     pipeline_name: str,
     summary_name: str,
+    snapshot_status: str = "VALIDATED",
+    batch_size: int = BATCH_SIZE,
+    commit_each_batch: bool = False,
+    use_native_bulk_copy: bool = False,
 ) -> dict[str, int]:
     """Register one snapshot and transactionally load a staging table group."""
 
@@ -360,7 +403,14 @@ def load_staging_table_group(
     row_counts: dict[str, int] = {}
 
     try:
-        with connect() as connection:
+        if use_native_bulk_copy:
+            from transport_platform.database.sql_server import connect_bulk
+
+            connection_context = connect_bulk()
+        else:
+            connection_context = connect()
+
+        with connection_context as connection:
             cursor = connection.cursor()
 
             with ZipFile(snapshot_path) as archive:
@@ -373,12 +423,25 @@ def load_staging_table_group(
                     raise ValueError(f"Snapshot missing files: {missing_list}")
 
                 for definition in definitions:
-                    rows_loaded = _insert_table(
-                        cursor,
-                        archive,
-                        definition,
-                        snapshot_key,
-                    )
+                    if use_native_bulk_copy:
+                        rows_loaded = _bulk_copy_table(
+                            connection,
+                            cursor,
+                            archive,
+                            definition,
+                            snapshot_key,
+                            batch_size=batch_size,
+                        )
+                    else:
+                        rows_loaded = _insert_table(
+                            connection,
+                            cursor,
+                            archive,
+                            definition,
+                            snapshot_key,
+                            batch_size=batch_size,
+                            commit_each_batch=commit_each_batch,
+                        )
                     row_counts[definition.source_file] = rows_loaded
                     print(f"Loaded {definition.source_file}: {rows_loaded:,} rows")
 
@@ -386,7 +449,7 @@ def load_staging_table_group(
             cursor.execute(
                 """
                 UPDATE governance.source_snapshot
-                SET snapshot_status = 'VALIDATED'
+                SET snapshot_status = ?
                 WHERE snapshot_key = ?;
 
                 UPDATE governance.pipeline_run
@@ -397,6 +460,7 @@ def load_staging_table_group(
                     rows_loaded = ?
                 WHERE pipeline_run_key = ?;
                 """,
+                snapshot_status,
                 snapshot_key,
                 total_rows,
                 total_rows,
@@ -404,20 +468,26 @@ def load_staging_table_group(
             )
             connection.commit()
     except Exception as error:
-        with connect() as connection:
-            connection.cursor().execute(
-                """
-                UPDATE governance.pipeline_run
-                SET
-                    run_status = 'FAILED',
-                    completed_at_utc = SYSUTCDATETIME(),
-                    error_message = ?
-                WHERE pipeline_run_key = ?;
-                """,
-                str(error)[:4000],
-                pipeline_run_key,
+        try:
+            with connect() as connection:
+                connection.cursor().execute(
+                    """
+                    UPDATE governance.pipeline_run
+                    SET
+                        run_status = 'FAILED',
+                        completed_at_utc = SYSUTCDATETIME(),
+                        error_message = ?
+                    WHERE pipeline_run_key = ?;
+                    """,
+                    str(error)[:4000],
+                    pipeline_run_key,
+                )
+                connection.commit()
+        except Exception as audit_error:
+            error.add_note(
+                "Pipeline failure could not be recorded immediately: "
+                f"{audit_error}"
             )
-            connection.commit()
         raise
 
     print(f"Snapshot key: {snapshot_key}")

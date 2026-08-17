@@ -6,6 +6,7 @@ services:
       ACCEPT_EULA: "Y"
       MSSQL_PID: Developer
       MSSQL_SA_PASSWORD: ${SQL_SERVER_PASSWORD}
+      MSSQL_MEMORY_LIMIT_MB: ${SQL_SERVER_MEMORY_LIMIT_MB:-2048}
     ports:
       - "${SQL_SERVER_PORT:-1433}:1433"
     volumes:
