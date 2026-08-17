@@ -144,6 +144,22 @@ range, inserts missing calendar dates and maintains current and historical
 operator versions. Reprocessing the same snapshot does not duplicate date or
 operator rows. Each attempt is recorded in `governance.pipeline_run`.
 
+## Load network warehouse dimensions
+
+After the core dimensions succeed, build the Type 2 route and stop dimensions
+for the same snapshot:
+
+```bash
+python -m transport_platform.warehouse.load_network_dimensions 1
+```
+
+The set based SQL procedure validates route identifiers, operator references,
+route types, route colours, stop identifiers, coordinates and coded stop
+attributes before changing warehouse history. Routes resolve to the current
+operator version. Changed or removed route and stop versions are closed while
+new current versions are inserted. Reprocessing the same snapshot is
+idempotent, and every attempt is recorded in `governance.pipeline_run`.
+
 ## Data layers
 
 | Layer | Responsibility |
