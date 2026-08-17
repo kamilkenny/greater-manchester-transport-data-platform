@@ -176,6 +176,22 @@ Services published only through added date exceptions are also supported.
 Reprocessing the same immutable snapshot does not duplicate service or bridge
 rows, and each attempt is recorded in `governance.pipeline_run`.
 
+## Load trip dimensions
+
+After the network dimensions and service calendars succeed, build the
+snapshot specific trip dimension:
+
+```bash
+python -m transport_platform.warehouse.load_trip_dimension 1
+```
+
+The loader validates trip identifiers, direction and accessibility codes,
+then resolves each trip to the service belonging to the snapshot and the
+route version valid when that snapshot was published. Referenced shapes must
+also exist in the high volume staging data. Reprocessing the same immutable
+snapshot inserts no duplicate trips, and every attempt is recorded in
+`governance.pipeline_run`.
+
 ## Data layers
 
 | Layer | Responsibility |
