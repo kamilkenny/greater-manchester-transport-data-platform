@@ -160,6 +160,22 @@ operator version. Changed or removed route and stop versions are closed while
 new current versions are inserted. Reprocessing the same snapshot is
 idempotent, and every attempt is recorded in `governance.pipeline_run`.
 
+## Load service calendars
+
+After the core dimensions succeed, build the snapshot specific service
+dimension and active service date bridge:
+
+```bash
+python -m transport_platform.warehouse.load_service_calendar 1
+```
+
+The loader validates weekday flags, calendar ranges, exception types and
+natural key uniqueness. It expands normal weekday operation against the shared
+date dimension, removes cancelled dates and adds exceptional operating dates.
+Services published only through added date exceptions are also supported.
+Reprocessing the same immutable snapshot does not duplicate service or bridge
+rows, and each attempt is recorded in `governance.pipeline_run`.
+
 ## Data layers
 
 | Layer | Responsibility |
