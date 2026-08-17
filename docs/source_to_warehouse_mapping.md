@@ -6,7 +6,9 @@ This document defines how the TfGM GTFS source files are loaded,
 validated, transformed and mapped into the analytical warehouse.
 
 The mapping provides one consistent contract for Python, Microsoft
-Fabric Data Factory, Azure SQL, SSIS, SSRS, FastAPI and Power BI.
+Fabric Data Factory, local SQL Server Developer, SSIS, SSRS, FastAPI
+and Power BI. Approved analytical views are exported to a compact SQLite
+serving database for the public Azure App Service application.
 
 ## Data Layers
 
