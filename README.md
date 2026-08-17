@@ -208,6 +208,22 @@ Completed batches can be safely reused after an interrupted attempt, and a
 complete rerun inserts no duplicate shape points. Every attempt is recorded in
 `governance.pipeline_run`.
 
+## Load scheduled stop events
+
+After trips and network dimensions succeed, validate and promote scheduled
+stop events into the central timetable fact table:
+
+```bash
+python -m transport_platform.warehouse.load_scheduled_stop_events 1
+```
+
+The loader validates trip and stop relationships, stop sequences, optional
+codes, travelled distances and GTFS times, including services running beyond
+midnight. Times are converted into seconds after the service day begins. The
+validated source is committed in resumable batches of 50,000 rows, limiting
+memory and transaction log pressure. A complete rerun inserts no duplicates,
+and every attempt is recorded in `governance.pipeline_run`.
+
 ## Data layers
 
 | Layer | Responsibility |
