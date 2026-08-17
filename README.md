@@ -85,6 +85,21 @@ Reprocessing the same checksum reuses its snapshot key and replaces only
 that snapshot's reference staging rows. Each attempt is recorded in
 `governance.pipeline_run`.
 
+## Load GTFS network staging
+
+After the reference tables succeed, load `routes.txt`, `stops.txt` and
+`trips.txt` from the same preserved snapshot:
+
+```bash
+python -m transport_platform.ingestion.load_network_tables \
+  data/raw/gtfs/YYYY/MM/DD/tfgm_gtfs_TIMESTAMP_CHECKSUM.zip
+```
+
+The loader uses the same immutable snapshot registration, bounded batching,
+row hashing and pipeline auditing as the reference loader. Reprocessing the
+same snapshot replaces only its network staging rows and creates a new audit
+run.
+
 ## Data layers
 
 | Layer | Responsibility |

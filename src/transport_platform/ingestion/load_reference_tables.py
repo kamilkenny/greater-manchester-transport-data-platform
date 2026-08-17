@@ -15,7 +15,7 @@ from zipfile import ZipFile
 
 from transport_platform.database.sql_server import connect
 
-PIPELINE_NAME = "load_gtfs_reference_staging"
+REFERENCE_PIPELINE_NAME = "load_gtfs_reference_staging"
 ORCHESTRATOR = "Python"
 BATCH_SIZE = 10_000
 
@@ -270,7 +270,11 @@ def _register_snapshot(
     return int(inserted[0])
 
 
-def _start_pipeline_run(cursor: Any, snapshot_key: int) -> int:
+def _start_pipeline_run(
+    cursor: Any,
+    snapshot_key: int,
+    pipeline_name: str,
+) -> int:
     """Create and return one Python pipeline run record."""
 
     inserted = cursor.execute(
@@ -286,7 +290,7 @@ def _start_pipeline_run(cursor: Any, snapshot_key: int) -> int:
         VALUES (?, ?, ?, 'STARTED', SYSUTCDATETIME());
         """,
         snapshot_key,
-        PIPELINE_NAME,
+        pipeline_name,
         ORCHESTRATOR,
     ).fetchone()
     return int(inserted[0])
@@ -329,8 +333,13 @@ def _insert_table(
     return rows_loaded
 
 
-def load_reference_tables(snapshot_path: Path) -> dict[str, int]:
-    """Register one snapshot and transactionally load reference staging."""
+def load_staging_table_group(
+    snapshot_path: Path,
+    definitions: Sequence[TableLoadDefinition],
+    pipeline_name: str,
+    summary_name: str,
+) -> dict[str, int]:
+    """Register one snapshot and transactionally load a staging table group."""
 
     if not snapshot_path.exists():
         raise FileNotFoundError(f"Snapshot not found: {snapshot_path}")
@@ -341,7 +350,11 @@ def load_reference_tables(snapshot_path: Path) -> dict[str, int]:
     with connect() as connection:
         cursor = connection.cursor()
         snapshot_key = _register_snapshot(cursor, metadata, feed_information)
-        pipeline_run_key = _start_pipeline_run(cursor, snapshot_key)
+        pipeline_run_key = _start_pipeline_run(
+            cursor,
+            snapshot_key,
+            pipeline_name,
+        )
         connection.commit()
 
     row_counts: dict[str, int] = {}
@@ -353,13 +366,13 @@ def load_reference_tables(snapshot_path: Path) -> dict[str, int]:
             with ZipFile(snapshot_path) as archive:
                 archive_names = set(archive.namelist())
                 missing_files = {
-                    definition.source_file for definition in REFERENCE_TABLES
+                    definition.source_file for definition in definitions
                 } - archive_names
                 if missing_files:
                     missing_list = ", ".join(sorted(missing_files))
                     raise ValueError(f"Snapshot missing files: {missing_list}")
 
-                for definition in REFERENCE_TABLES:
+                for definition in definitions:
                     rows_loaded = _insert_table(
                         cursor,
                         archive,
@@ -409,8 +422,19 @@ def load_reference_tables(snapshot_path: Path) -> dict[str, int]:
 
     print(f"Snapshot key: {snapshot_key}")
     print(f"Pipeline run key: {pipeline_run_key}")
-    print(f"Total reference rows loaded: {sum(row_counts.values()):,}")
+    print(f"Total {summary_name} rows loaded: {sum(row_counts.values()):,}")
     return row_counts
+
+
+def load_reference_tables(snapshot_path: Path) -> dict[str, int]:
+    """Register one snapshot and transactionally load reference staging."""
+
+    return load_staging_table_group(
+        snapshot_path=snapshot_path,
+        definitions=REFERENCE_TABLES,
+        pipeline_name=REFERENCE_PIPELINE_NAME,
+        summary_name="reference",
+    )
 
 
 def main() -> None:

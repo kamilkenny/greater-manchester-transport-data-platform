@@ -73,11 +73,16 @@ The following controls apply:
 
 ## Data Freshness
 
-The platform is batch based. A local pipeline run downloads and processes a
-new publication, refreshes the approved analytical views and exports a new
-SQLite serving database. GitHub Actions validates and deploys the resulting
-application artefact.
+Phase 1 is nightly timetable intelligence. A local pipeline run downloads and
+processes the latest TfGM GTFS publication, refreshes the approved analytical
+views and exports a new SQLite serving database. GitHub Actions validates and
+deploys the resulting application artefact.
 
 The dashboard must display the source publication timestamp and the last
 successful pipeline timestamp. It must not describe the data as live vehicle
 movement, actual punctuality or an official TfGM operational warning.
+
+Phase 2 will add Bus Open Data Service vehicle monitoring as a separate real
+time data path. BODS observations will have their own ingestion frequency,
+raw retention, staging tables, quality rules and freshness indicators. They
+will not overwrite or be presented as part of the nightly timetable feed.
