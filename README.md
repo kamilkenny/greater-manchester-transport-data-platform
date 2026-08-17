@@ -192,6 +192,22 @@ also exist in the high volume staging data. Reprocessing the same immutable
 snapshot inserts no duplicate trips, and every attempt is recorded in
 `governance.pipeline_run`.
 
+## Load geographical shape points
+
+After high volume staging succeeds, validate and promote the geographical
+shape points into their typed warehouse table:
+
+```bash
+python -m transport_platform.warehouse.load_shape_points 1
+```
+
+The loader validates identifiers, coordinates, point sequences, travelled
+distances and business key uniqueness before writing any rows. It then commits
+bounded batches of 50,000 rows to limit memory and transaction log pressure.
+Completed batches can be safely reused after an interrupted attempt, and a
+complete rerun inserts no duplicate shape points. Every attempt is recorded in
+`governance.pipeline_run`.
+
 ## Data layers
 
 | Layer | Responsibility |
