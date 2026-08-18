@@ -242,7 +242,13 @@ The table records:
 * Current row hash
 * Detected timestamp
 
-Change types are `ADDED`, `REMOVED` and `CHANGED`.
+Change types are `ADDED`, `REMOVED` and `MODIFIED`.
+
+The comparison loader selects the most recent earlier loaded snapshot whose
+operator, route, stop, service and trip warehouse stages completed
+successfully. The first snapshot is a valid bootstrap and records no change
+facts. Subsequent comparisons are immutable and idempotent, while conflicting
+results are rejected rather than silently replacing publication history.
 
 ## Storage and History Rules
 

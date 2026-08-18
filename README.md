@@ -246,6 +246,24 @@ independently. Existing rows are compared with the complete derived result,
 so interrupted attempts can resume and a complete rerun inserts no
 duplicates. Every attempt is recorded in `governance.pipeline_run`.
 
+## Build publication changes
+
+After the entity dimensions for a snapshot succeed, compare the publication
+with the most recent eligible predecessor:
+
+```bash
+python -m transport_platform.warehouse.load_publication_changes 1
+```
+
+The first snapshot is treated as a successful bootstrap and produces no
+change facts. From the second snapshot onwards, the loader compares operators,
+routes, stops, services and trips using their governed business identifiers
+and row hashes. Added, removed and modified entities are written once to
+`warehouse.fact_publication_change`. Existing results are verified before any
+new rows are inserted, making complete reruns idempotent. An explicit previous
+snapshot can be supplied with `--previous-snapshot-key` when controlled
+backfills are required.
+
 ## Data layers
 
 | Layer | Responsibility |
