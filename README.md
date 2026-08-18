@@ -353,6 +353,28 @@ with `deploy/azure/startup.sh`, serving the FastAPI application from `src` and
 opening the analytical database in read only mode. The intended production
 application name is `gm-transport-intelligence-kamil`.
 
+### Production acceptance smoke test
+
+After an Azure deployment or application restart, run the governed smoke test
+against the public application:
+
+```bash
+python -m transport_platform.deployment.smoke_test \
+  --base-url https://gm-transport-intelligence-kamil.azurewebsites.net \
+  --output data/processed/deployment/azure_smoke_test.json
+```
+
+The command validates ten public production contracts: application health,
+SQLite integrity, dashboard HTML, creator credit, static assets, executive
+overview, transport modes, route intelligence, map data, pipeline health and
+data quality results. It writes an atomic JSON acceptance report containing
+individual response status, duration and validation evidence for every check.
+
+The process exits with a nonzero status if any endpoint is unavailable or
+returns an invalid contract, making it suitable for controlled post deployment
+verification. It sends no credentials, changes no application data and should
+only be run after the App Service allowance is available.
+
 ## Governed orchestration and continuous integration
 
 The production orchestration entry point coordinates the complete 16 stage
