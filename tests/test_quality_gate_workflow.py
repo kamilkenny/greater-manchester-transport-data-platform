@@ -12,10 +12,13 @@ def workflow_text() -> str:
     return WORKFLOW_PATH.read_text(encoding="utf-8")
 
 
-def test_quality_gate_is_manual_and_read_only() -> None:
+def test_quality_gate_triggers_are_controlled_and_read_only() -> None:
     workflow = workflow_text()
 
     assert "workflow_dispatch:" in workflow
+    assert "pull_request:" in workflow
+    assert "push:" in workflow
+    assert workflow.count("      - main") == 2
     assert "schedule:" not in workflow
     assert "permissions:\n  contents: read" in workflow
     assert "cancel-in-progress: true" in workflow

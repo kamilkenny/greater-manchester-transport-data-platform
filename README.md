@@ -384,8 +384,9 @@ The optional `--force` flag reprocesses an existing publication, while
 `--skip-package` completes the analytical export without rebuilding the Azure
 deployment package. The orchestrator never deploys to Azure automatically.
 
-The manual GitHub Actions quality gate runs on an independent Ubuntu runner
-with Python 3.12. It performs the following controlled checks:
+The GitHub Actions quality gate runs automatically for changes to `main` and
+for pull requests targeting `main`, and it can also be started manually. It
+uses an independent Ubuntu runner with Python 3.12 to perform these checks:
 
 1. Installs the project and development dependencies.
 2. Runs Ruff across the repository.
