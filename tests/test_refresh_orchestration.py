@@ -103,6 +103,13 @@ def test_force_runs_complete_pipeline_in_dependency_order(
     )
     monkeypatch.setattr(
         refresh_platform,
+        "_snapshot_is_complete",
+        lambda _snapshot_key: pytest.fail(
+            "forced refresh queried snapshot completion"
+        ),
+    )
+    monkeypatch.setattr(
+        refresh_platform,
         "_resolve_snapshot_key",
         lambda _path: 23,
     )

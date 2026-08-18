@@ -302,12 +302,11 @@ def run_refresh(
         manifest["source_sha256"] = metadata["sha256"]
         existing_snapshot = _lookup_snapshot(metadata["sha256"])
 
-        existing_is_complete = (
-            existing_snapshot is not None
-            and _snapshot_is_complete(existing_snapshot[0])
-        )
+        existing_is_complete = False
+        if existing_snapshot is not None and not force:
+            existing_is_complete = _snapshot_is_complete(existing_snapshot[0])
 
-        if existing_snapshot is not None and existing_is_complete and not force:
+        if existing_snapshot is not None and existing_is_complete:
             completed_at = _utc_now()
             manifest.update(
                 status="SKIPPED_UNCHANGED",
@@ -319,7 +318,7 @@ def run_refresh(
             return manifest
 
         if existing_snapshot is not None:
-            manifest["resuming_snapshot"] = not existing_is_complete
+            manifest["resuming_snapshot"] = not force and not existing_is_complete
 
         run(
             "profile_gtfs_structure",

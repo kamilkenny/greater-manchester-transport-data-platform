@@ -46,4 +46,4 @@ def test_quality_gate_cannot_deploy_to_azure() -> None:
     assert "azure/login" not in workflow
     assert "az webapp" not in workflow
     assert "azure credentials" not in workflow
-    assert "actions/upload-artifact@v4" in workflow
+    assert "actions/upload-artifact@v7" in workflow
