@@ -304,6 +304,28 @@ validation and publishes the completed file atomically. The default output is
 `SERVING_SQLITE_PATH` or the `--output` option. Every completed or failed
 export is recorded in `governance.pipeline_run`.
 
+## FastAPI intelligence dashboard
+
+The public application reads only the generated SQLite serving database. It
+provides an executive overview, daily network trends, bus and tram comparison,
+ranked route and stop intelligence, a geographical stop map, operator
+contribution, publication change monitoring, pipeline health and data quality
+through governed JSON endpoints.
+
+Start the application locally after generating the serving database:
+
+```bash
+uvicorn transport_platform.api.app:app \
+  --host 0.0.0.0 \
+  --port 8000 \
+  --reload
+```
+
+Open `/` for the dashboard, `/health` for the deployment health probe and
+`/api/docs` for the interactive API contract. The user interface clearly
+identifies the indicators as scheduled timetable intelligence rather than
+live vehicle performance, punctuality, reliability or passenger demand.
+
 ## Data layers
 
 | Layer | Responsibility |

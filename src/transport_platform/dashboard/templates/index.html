@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Greater Manchester scheduled public transport intelligence, network trends, route and stop rankings, publication changes and pipeline health.">
+    <meta name="author" content="Kamil Ridwan">
+    <title>{{ title }}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIINfQ3ynhC0SS3ME5tlTe2BBDCF5SAQF0=" crossorigin="">
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <div class="ambient ambient-one"></div>
+    <div class="ambient ambient-two"></div>
+    <header class="topbar">
+        <a class="brand" href="#top" aria-label="Greater Manchester Transport Intelligence home">
+            <span class="brand-mark" aria-hidden="true">
+                <span></span><span></span><span></span>
+            </span>
+            <span>
+                <strong>GM Transport</strong>
+                <small>Intelligence Platform</small>
+            </span>
+        </a>
+        <nav class="desktop-nav" aria-label="Dashboard navigation">
+            <a href="#network">Network</a>
+            <a href="#routes">Routes</a>
+            <a href="#places">Places</a>
+            <a href="#operations">Operations</a>
+        </nav>
+        <div class="topbar-actions">
+            <span id="global-status" class="status-chip loading"><i></i>Connecting</span>
+            <button id="refresh-button" class="refresh-button" type="button" aria-label="Refresh dashboard data">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8.1 8.1 0 0 0-15.5-3M4 4v4h4M4 13a8.1 8.1 0 0 0 15.5 3M20 20v-4h-4"/></svg>
+                Refresh
+            </button>
+        </div>
+    </header>
+
+    <main id="top" class="dashboard-shell">
+        <section class="hero reveal">
+            <div class="hero-copy">
+                <div class="hero-intro">
+                    <div class="eyebrow"><span></span>Scheduled network observatory</div>
+                    <p class="creator-credit"><span>Designed and modelled by</span><strong>Kamil Ridwan</strong></p>
+                </div>
+                <h1>See Greater Manchester’s transport network as a <em>living system.</em></h1>
+                <p>One governed view of timetable coverage, service intensity, network geography, publication movement and the pipelines that keep every insight trustworthy.</p>
+                <div class="hero-meta">
+                    <div><span>Source publication</span><strong id="source-publication">Loading</strong></div>
+                    <div><span>Reporting horizon</span><strong id="reporting-window">Loading</strong></div>
+                    <div><span>Serving refresh</span><strong id="serving-refresh">Loading</strong></div>
+                </div>
+            </div>
+            <div class="hero-orbit" aria-hidden="true">
+                <div class="orbit orbit-outer"><span class="orbit-node bus-node"></span></div>
+                <div class="orbit orbit-inner"><span class="orbit-node tram-node"></span></div>
+                <div class="orbit-core">
+                    <small>Network status</small>
+                    <strong id="hero-health-count">0/0</strong>
+                    <span>pipelines service ready</span>
+                </div>
+            </div>
+        </section>
+
+        <section class="kpi-grid reveal" aria-label="Executive network indicators">
+            <article class="kpi-card accent-yellow">
+                <span class="kpi-label">Active operators</span>
+                <strong id="kpi-operators">—</strong>
+                <small>Across the governed network</small>
+            </article>
+            <article class="kpi-card accent-mint">
+                <span class="kpi-label">Published routes</span>
+                <strong id="kpi-routes">—</strong>
+                <small><b id="kpi-high-frequency">—</b> high frequency routes</small>
+            </article>
+            <article class="kpi-card accent-cyan">
+                <span class="kpi-label">Network stops</span>
+                <strong id="kpi-stops">—</strong>
+                <small><b id="kpi-hubs">—</b> major scheduled hubs</small>
+            </article>
+            <article class="kpi-card accent-violet">
+                <span class="kpi-label">Scheduled trips</span>
+                <strong id="kpi-trips">—</strong>
+                <small>Within the source publication</small>
+            </article>
+            <article class="kpi-card accent-orange">
+                <span class="kpi-label">Stop events</span>
+                <strong id="kpi-events">—</strong>
+                <small>Governed timetable observations</small>
+            </article>
+            <article class="kpi-card accent-green">
+                <span class="kpi-label">Data freshness</span>
+                <strong id="kpi-freshness">—</strong>
+                <small id="kpi-age">Awaiting source metadata</small>
+            </article>
+        </section>
+
+        <section id="network" class="section-block reveal">
+            <div class="section-heading">
+                <div>
+                    <span class="section-index">01</span>
+                    <p class="eyebrow-text">Network pulse</p>
+                    <h2>Scheduled activity through time</h2>
+                    <p>Explore how published trips and active routes change across the reporting horizon.</p>
+                </div>
+                <div class="control-group" aria-label="Trend controls">
+                    <select id="trend-mode" aria-label="Transport mode">
+                        <option value="">All modes</option>
+                        <option value="Bus">Bus</option>
+                        <option value="Tram">Tram</option>
+                    </select>
+                    <select id="trend-days" aria-label="Trend period">
+                        <option value="30">30 days</option>
+                        <option value="90" selected>90 days</option>
+                        <option value="180">180 days</option>
+                        <option value="366">Full horizon</option>
+                    </select>
+                </div>
+            </div>
+            <div class="analytics-grid network-grid">
+                <article class="panel chart-panel span-two">
+                    <div class="panel-header">
+                        <div><span class="panel-kicker">Daily schedule</span><h3>Trips and route coverage</h3></div>
+                        <div class="legend"><span class="legend-trips">Trips</span><span class="legend-routes">Routes</span></div>
+                    </div>
+                    <div class="chart-wrap"><canvas id="network-chart"></canvas></div>
+                </article>
+                <article class="panel mode-panel">
+                    <div class="panel-header"><div><span class="panel-kicker">Mode balance</span><h3>Bus and tram</h3></div></div>
+                    <div class="mode-ring-wrap">
+                        <canvas id="mode-chart"></canvas>
+                        <div class="mode-ring-centre"><strong id="mode-total">—</strong><span>scheduled trips</span></div>
+                    </div>
+                    <div id="mode-breakdown" class="mode-breakdown"></div>
+                </article>
+            </div>
+        </section>
+
+        <section id="routes" class="section-block reveal">
+            <div class="section-heading">
+                <div>
+                    <span class="section-index">02</span>
+                    <p class="eyebrow-text">Service intelligence</p>
+                    <h2>Where scheduled service is strongest</h2>
+                    <p>Transparent comparative indicators combine trip intensity, operating span and network coverage.</p>
+                </div>
+                <div class="control-group">
+                    <select id="route-mode" aria-label="Filter routes by mode">
+                        <option value="">All modes</option>
+                        <option value="Bus">Bus</option>
+                        <option value="Tram">Tram</option>
+                    </select>
+                    <select id="route-sort" aria-label="Sort routes">
+                        <option value="service">Service score</option>
+                        <option value="trips">Daily trips</option>
+                        <option value="frequency">Frequency</option>
+                        <option value="coverage">Stop coverage</option>
+                    </select>
+                </div>
+            </div>
+            <div class="analytics-grid leader-grid">
+                <article class="panel leaderboard-panel span-two">
+                    <div class="panel-header"><div><span class="panel-kicker">Route leaderboard</span><h3>Top scheduled services</h3></div><span class="method-chip">Scheduled, not live</span></div>
+                    <div class="table-wrap">
+                        <table>
+                            <thead><tr><th>Rank</th><th>Route</th><th>Mode</th><th>Service score</th><th>Daily trips</th><th>Headway</th></tr></thead>
+                            <tbody id="route-table"><tr><td colspan="6" class="loading-cell">Loading route intelligence</td></tr></tbody>
+                        </table>
+                    </div>
+                </article>
+                <article class="panel insight-panel">
+                    <div class="panel-header"><div><span class="panel-kicker">Leading service</span><h3>Route spotlight</h3></div></div>
+                    <div class="route-spotlight">
+                        <span id="leading-route-mode" class="route-mode-badge">—</span>
+                        <strong id="leading-route">—</strong>
+                        <p id="leading-route-operator">Awaiting route intelligence</p>
+                        <div class="score-orb"><span id="leading-route-score">—</span><small>service score</small></div>
+                        <dl>
+                            <div><dt>Frequency</dt><dd id="leading-route-frequency">—</dd></div>
+                            <div><dt>Average daily trips</dt><dd id="leading-route-trips">—</dd></div>
+                            <div><dt>Average stop coverage</dt><dd id="leading-route-coverage">—</dd></div>
+                        </dl>
+                    </div>
+                </article>
+            </div>
+        </section>
+
+        <section id="places" class="section-block reveal">
+            <div class="section-heading">
+                <div>
+                    <span class="section-index">03</span>
+                    <p class="eyebrow-text">Places and access</p>
+                    <h2>The network, grounded in place</h2>
+                    <p>Explore major scheduled hubs, stop activity, route choice and reported accessibility.</p>
+                </div>
+                <label class="search-control">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+                    <input id="stop-search" type="search" placeholder="Search stop name" aria-label="Search stops">
+                </label>
+            </div>
+            <div class="analytics-grid place-grid">
+                <article class="panel map-panel span-two">
+                    <div class="panel-header"><div><span class="panel-kicker">Network geography</span><h3>Scheduled activity map</h3></div><span class="method-chip" id="map-count">Loading stops</span></div>
+                    <div id="network-map" aria-label="Map of scheduled stop activity"></div>
+                </article>
+                <article class="panel stop-panel">
+                    <div class="panel-header"><div><span class="panel-kicker">Hub intelligence</span><h3>Leading stops</h3></div></div>
+                    <div id="stop-list" class="stop-list"><div class="loading-cell">Loading stops</div></div>
+                </article>
+            </div>
+        </section>
+
+        <section class="section-block reveal">
+            <div class="section-heading compact-heading">
+                <div><p class="eyebrow-text">Operator landscape</p><h2>Scheduled network contribution</h2></div>
+            </div>
+            <div class="analytics-grid operator-grid">
+                <article class="panel span-two">
+                    <div class="panel-header"><div><span class="panel-kicker">Published volume</span><h3>Trips by operator</h3></div></div>
+                    <div class="chart-wrap operator-chart-wrap"><canvas id="operator-chart"></canvas></div>
+                </article>
+                <article class="panel accessibility-panel">
+                    <div class="panel-header"><div><span class="panel-kicker">Source completeness</span><h3>Accessibility reporting</h3></div></div>
+                    <div class="accessibility-visual">
+                        <div class="accessibility-number"><strong id="accessible-stops">—</strong><span>stops reported accessible</span></div>
+                        <div class="progress-track"><span id="accessibility-progress"></span></div>
+                        <p id="accessibility-detail">Calculating the published accessibility coverage.</p>
+                    </div>
+                </article>
+            </div>
+        </section>
+
+        <section id="operations" class="section-block reveal">
+            <div class="section-heading">
+                <div>
+                    <span class="section-index">04</span>
+                    <p class="eyebrow-text">Operational trust</p>
+                    <h2>Every pipeline, visible</h2>
+                    <p>Latest execution state, recovery history and publication movement in one operational control centre.</p>
+                </div>
+                <div id="operations-summary" class="operations-summary">Loading operational state</div>
+            </div>
+            <div class="analytics-grid operations-grid">
+                <article class="panel span-two">
+                    <div class="panel-header"><div><span class="panel-kicker">Pipeline control centre</span><h3>Current health</h3></div><span class="method-chip" id="pipeline-count">— pipelines</span></div>
+                    <div id="pipeline-grid" class="pipeline-grid"><div class="loading-cell">Loading pipeline health</div></div>
+                </article>
+                <article class="panel publication-panel">
+                    <div class="panel-header"><div><span class="panel-kicker">Publication watch</span><h3>What changed</h3></div></div>
+                    <div id="publication-content" class="empty-state">
+                        <span class="empty-icon">↻</span>
+                        <strong>Checking publication history</strong>
+                        <p>Loading entity change intelligence.</p>
+                    </div>
+                </article>
+                <article class="panel quality-panel span-three">
+                    <div class="panel-header"><div><span class="panel-kicker">Data quality register</span><h3>Latest governed checks</h3></div><span class="method-chip" id="quality-total">Loading results</span></div>
+                    <div class="quality-layout">
+                        <div class="quality-counts">
+                            <div class="quality-count pass"><span>Passed</span><strong id="quality-pass">—</strong></div>
+                            <div class="quality-count warn"><span>Warnings</span><strong id="quality-warn">—</strong></div>
+                            <div class="quality-count fail"><span>Failed</span><strong id="quality-fail">—</strong></div>
+                        </div>
+                        <div id="quality-results" class="quality-results"><p>Loading data quality observations.</p></div>
+                    </div>
+                </article>
+            </div>
+        </section>
+
+        <section class="methodology reveal">
+            <div><span class="section-index">05</span><p class="eyebrow-text">Read the signal correctly</p><h2>Transparent by design</h2></div>
+            <p id="methodology-note">This platform analyses published scheduled services. It does not represent live vehicle positions, actual punctuality, disruption, reliability or passenger demand.</p>
+            <div class="method-tags"><span>GTFS timetable data</span><span>Snapshot history</span><span>Governed metrics</span><span>Read only serving</span></div>
+        </section>
+    </main>
+
+    <footer>
+        <div class="brand footer-brand"><span class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></span><span><strong>GM Transport</strong><small>Intelligence Platform</small></span></div>
+        <div class="footer-credit">
+            <p>Designed and modelled by <strong>Kamil Ridwan</strong></p>
+            <span>Engineered for transparent, reproducible public transport intelligence.</span>
+        </div>
+        <a href="/api/docs">API documentation</a>
+    </footer>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <script src="/static/app.js" defer></script>
+</body>
+</html>
