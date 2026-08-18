@@ -1,5 +1,10 @@
 # Greater Manchester Transport Data Platform
 
+[![Quality gate][quality-gate-badge]][quality-gate-workflow]
+
+[quality-gate-badge]: https://github.com/kamilkenny/greater-manchester-transport-data-platform/actions/workflows/quality-gate.yml/badge.svg
+[quality-gate-workflow]: https://github.com/kamilkenny/greater-manchester-transport-data-platform/actions/workflows/quality-gate.yml
+
 An end to end Greater Manchester public transport data engineering and
 service quality platform built from TfGM GTFS publications.
 
@@ -23,6 +28,8 @@ engineering warehouse.
 6. FastAPI and the dashboard read SQLite on Azure App Service.
 7. SSIS, SSRS and Power BI use the same governed model for their agreed
    project demonstrations.
+8. GitHub Actions provides an independent quality gate for linting, automated
+   tests and orchestration dry run evidence.
 
 This design avoids Azure SQL Database consumption while preserving the
 Microsoft data platform skills targeted by the project.
@@ -345,6 +352,53 @@ The command validates SQLite integrity before atomically publishing
 with `deploy/azure/startup.sh`, serving the FastAPI application from `src` and
 opening the analytical database in read only mode. The intended production
 application name is `gm-transport-intelligence-kamil`.
+
+## Governed orchestration and continuous integration
+
+The production orchestration entry point coordinates the complete 16 stage
+source to serving workflow. It records stage timings and outcomes in an atomic
+JSON manifest, uses SHA256 publication identity to skip unchanged snapshots,
+supports recovery of incomplete snapshots and preserves strict dependency
+ordering across ingestion, validation, staging, warehouse, analytics and
+serving operations.
+
+Preview the ordered execution plan without connecting to SQL Server, building
+an Azure package or changing platform state:
+
+```bash
+python -m transport_platform.orchestration.refresh_platform \
+  --dry-run \
+  --skip-package \
+  --manifest data/processed/orchestration/dry_run.json
+```
+
+Run a governed local refresh when SQL Server and the required environment
+settings are available:
+
+```bash
+python -m transport_platform.orchestration.refresh_platform \
+  --manifest data/processed/orchestration/latest_refresh.json
+```
+
+The optional `--force` flag reprocesses an existing publication, while
+`--skip-package` completes the analytical export without rebuilding the Azure
+deployment package. The orchestrator never deploys to Azure automatically.
+
+The manual GitHub Actions quality gate runs on an independent Ubuntu runner
+with Python 3.12. It performs the following controlled checks:
+
+1. Installs the project and development dependencies.
+2. Runs Ruff across the repository.
+3. Runs the complete automated test suite.
+4. Executes the orchestration dry run.
+5. Validates that all 16 stages are planned and Azure deployment is disabled.
+6. Retains the validated orchestration manifest as workflow evidence for 14
+   days.
+
+The workflow has read only repository permission and contains no Azure login,
+SQL Server credential or web application deployment step. This separation
+allows continuous integration to verify code and orchestration behaviour
+without consuming production hosting allowance or exposing engineering data.
 
 ## Data layers
 
