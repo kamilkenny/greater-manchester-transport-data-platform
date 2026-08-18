@@ -326,6 +326,26 @@ Open `/` for the dashboard, `/health` for the deployment health probe and
 identifies the indicators as scheduled timetable intelligence rather than
 live vehicle performance, punctuality, reliability or passenger demand.
 
+## Azure App Service deployment
+
+The production web package contains only the application source, lightweight
+web dependencies, the governed read only SQLite serving snapshot and a
+deployment manifest. SQL Server, raw GTFS files and engineering credentials
+are never included in the public application artefact.
+
+Build and validate the deployment package after exporting the latest approved
+analytics:
+
+```bash
+python -m transport_platform.deployment.build_azure_package
+```
+
+The command validates SQLite integrity before atomically publishing
+`dist/gm_transport_dashboard_azure.zip`. Azure App Service runs the package
+with `deploy/azure/startup.sh`, serving the FastAPI application from `src` and
+opening the analytical database in read only mode. The intended production
+application name is `gm-transport-intelligence-kamil`.
+
 ## Data layers
 
 | Layer | Responsibility |
