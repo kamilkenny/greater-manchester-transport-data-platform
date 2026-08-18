@@ -206,15 +206,26 @@ Measures include:
 
 ### warehouse.fact_stop_service_day
 
-Grain: One stop, route, service date and source snapshot.
+Grain: One stop, service date and source snapshot.
 
 Measures include:
 
-* Scheduled departure count
-* Scheduled arrival count
-* First scheduled service
-* Last scheduled service
-* Accessible trip count
+* Scheduled trip count
+* Distinct scheduled route count
+* First scheduled departure
+* Last scheduled departure
+* Service span in minutes
+* Average scheduled headway
+
+Daily facts are derived from validated warehouse records rather than directly
+from staging. Each trip and stop pattern is aggregated once, joined to its
+active dates through `warehouse.bridge_service_date`, then consolidated at the
+published daily grain. The default reporting window begins on the snapshot
+download date and covers 366 days. This prevents long term placeholder
+calendar validity dates from creating analytical rows that the nightly
+timetable product will not use. Average headway is the mean interval implied
+by the first and last scheduled departures when at least two trips are
+present.
 
 ### warehouse.fact_publication_change
 

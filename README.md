@@ -63,8 +63,8 @@ python -m transport_platform.database.initialise
 ```
 
 The initialiser creates the configured local database when necessary and
-applies `sql/ddl/001` through `sql/ddl/011` in order. It is safe to run the
-current idempotent DDL scripts again.
+applies every ordered script in `sql/ddl`. It is safe to run the current
+idempotent DDL scripts again.
 
 ## Load GTFS reference staging
 
@@ -223,6 +223,28 @@ midnight. Times are converted into seconds after the service day begins. The
 validated source is committed in resumable batches of 50,000 rows, limiting
 memory and transaction log pressure. A complete rerun inserts no duplicates,
 and every attempt is recorded in `governance.pipeline_run`.
+
+## Build daily service facts
+
+After service calendars, trips and scheduled stop events succeed, build the
+route and stop service day analytical facts:
+
+```bash
+python -m transport_platform.warehouse.load_daily_service_facts 1
+```
+
+The loader aggregates trip and service patterns once before expanding them
+through active service dates. Route facts describe scheduled trips, stop
+events, distinct stops, operating span and average scheduled headway. Stop
+facts describe scheduled trips, served routes, operating span and average
+scheduled headway. By default, it materialises 366 days beginning on the
+snapshot download date, avoiding the expansion of long term placeholder
+calendar ranges that are not useful to the nightly timetable product. The
+start date and horizon remain configurable through explicit command options.
+Bounded date batches limit transaction log pressure and are committed
+independently. Existing rows are compared with the complete derived result,
+so interrupted attempts can resume and a complete rerun inserts no
+duplicates. Every attempt is recorded in `governance.pipeline_run`.
 
 ## Data layers
 
