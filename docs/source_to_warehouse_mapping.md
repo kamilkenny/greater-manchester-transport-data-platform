@@ -274,3 +274,15 @@ publication.
 8. Compare the publication with the previous snapshot.
 9. Record data quality results and pipeline completion.
 10. Refresh approved analytical views.
+
+## Approved Analytics Contract
+
+The public serving export and Microsoft reporting tools consume only views in
+the `analytics` schema. The approved contract includes platform freshness and
+row counts, daily route service, compact route and stop summaries, detailed
+and summarised publication changes, recent pipeline execution history and
+recent data quality results. These views select the latest loaded snapshot
+where appropriate and expose explicit governed columns rather than staging
+records. Comparative route and stop scores describe scheduled service
+intensity, coverage and operating span only. They are explicitly not actual
+punctuality, reliability or passenger demand measures.

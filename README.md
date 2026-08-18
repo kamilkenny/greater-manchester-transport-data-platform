@@ -264,6 +264,24 @@ new rows are inserted, making complete reruns idempotent. An explicit previous
 snapshot can be supplied with `--previous-snapshot-key` when controlled
 backfills are required.
 
+## Approved analytics
+
+DDL scripts `022` through `038` create the approved reporting contract used by
+the serving export, FastAPI, the dashboard, SSRS and Power BI. The contract
+contains a one row platform and freshness summary, route level daily service,
+compact route and stop summaries, publication changes, recent pipeline runs
+and recent data quality results. It also provides network trends, operator and
+transport mode comparisons, ranked scheduled service intelligence, geographic
+coverage, accessibility, stop coordinate changes, executive dashboard KPIs
+and recent health for every pipeline. Application consumers do not query
+staging tables or the multi million row warehouse facts directly.
+
+Reapply the idempotent DDL whenever the view definitions change:
+
+```bash
+python -m transport_platform.database.initialise
+```
+
 ## Data layers
 
 | Layer | Responsibility |
