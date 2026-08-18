@@ -47,6 +47,20 @@ SELECT
      FROM analytics.vw_pipeline_health
      WHERE pipeline_health_status = 'HEALTHY') AS healthy_pipeline_count,
     (SELECT COUNT_BIG(*)
+     FROM analytics.vw_pipeline_health
+     WHERE pipeline_health_status = 'RECOVERED') AS recovered_pipeline_count,
+    (SELECT COUNT_BIG(*)
+     FROM analytics.vw_pipeline_health
+     WHERE pipeline_health_status IN ('HEALTHY', 'RECOVERED'))
+        AS service_ready_pipeline_count,
+    (SELECT COUNT_BIG(*)
+     FROM analytics.vw_pipeline_health
+     WHERE pipeline_health_status = 'ACTION REQUIRED')
+        AS action_required_pipeline_count,
+    (SELECT COUNT_BIG(*)
+     FROM analytics.vw_pipeline_health
+     WHERE pipeline_health_status = 'RUNNING') AS running_pipeline_count,
+    (SELECT COUNT_BIG(*)
      FROM analytics.vw_pipeline_health) AS monitored_pipeline_count,
     platform.last_successful_pipeline_at_utc
 FROM analytics.vw_platform_summary AS platform;

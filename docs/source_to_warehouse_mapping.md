@@ -274,6 +274,7 @@ publication.
 8. Compare the publication with the previous snapshot.
 9. Record data quality results and pipeline completion.
 10. Refresh approved analytical views.
+11. Export the approved analytics contract to the SQLite serving database.
 
 ## Approved Analytics Contract
 
@@ -286,3 +287,9 @@ where appropriate and expose explicit governed columns rather than staging
 records. Comparative route and stop scores describe scheduled service
 intensity, coverage and operating span only. They are explicitly not actual
 punctuality, reliability or passenger demand measures.
+
+The SQLite export contains the 17 approved analytics views, plus an export
+manifest and serving metadata. It is generated atomically and indexed for
+dashboard filters, trends, rankings, maps, pipeline health and data quality
+queries. Raw, staging and unrestricted warehouse records are never exposed to
+the public serving application.

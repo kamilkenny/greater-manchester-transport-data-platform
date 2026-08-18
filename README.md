@@ -282,6 +282,28 @@ Reapply the idempotent DDL whenever the view definitions change:
 python -m transport_platform.database.initialise
 ```
 
+Pipeline health is recovery aware. A latest failed run is marked
+`ACTION REQUIRED`, an active run is `RUNNING`, and a successful run following
+one or more recent failures is `RECOVERED`. Historical failure rates remain
+available without presenting a recovered service as currently unstable.
+
+## SQLite serving export
+
+The public application reads a compact, read only SQLite artefact rather than
+connecting to the engineering SQL Server database. Export all 17 approved
+analytics views with:
+
+```bash
+python -m transport_platform.serving.export_analytics
+```
+
+The exporter streams large results in bounded batches, creates dashboard
+indexes, writes freshness and row count metadata, runs SQLite integrity
+validation and publishes the completed file atomically. The default output is
+`data/serving/transport_dashboard.db`, configurable with
+`SERVING_SQLITE_PATH` or the `--output` option. Every completed or failed
+export is recorded in `governance.pipeline_run`.
+
 ## Data layers
 
 | Layer | Responsibility |

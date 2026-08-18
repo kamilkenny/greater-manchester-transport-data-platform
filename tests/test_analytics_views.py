@@ -127,5 +127,11 @@ def test_dashboard_contract_includes_freshness_location_and_health() -> None:
     assert "location_change_metres" in location_sql
     assert "recent_success_rate_pct" in health_sql
     assert "pipeline_health_status" in health_sql
+    assert "recent_failure_count > 0" in health_sql
+    assert "THEN 'RECOVERED'" in health_sql
+    assert "ELSE 'UNSTABLE'" not in health_sql
     assert "leading_route" in dashboard_sql
     assert "leading_stop" in dashboard_sql
+    assert "recovered_pipeline_count" in dashboard_sql
+    assert "service_ready_pipeline_count" in dashboard_sql
+    assert "action_required_pipeline_count" in dashboard_sql

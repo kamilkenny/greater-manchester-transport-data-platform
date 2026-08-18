@@ -55,9 +55,13 @@ SELECT
     CASE
         WHEN latest.run_status = 'STARTED' THEN 'RUNNING'
         WHEN latest.run_status = 'FAILED' THEN 'ACTION REQUIRED'
+        WHEN
+            latest.run_status = 'SUCCEEDED'
+            AND history.recent_failure_count > 0
+            THEN 'RECOVERED'
         WHEN history.recent_success_rate_pct >= 95 THEN 'HEALTHY'
         WHEN history.recent_success_rate_pct >= 80 THEN 'WATCH'
-        ELSE 'UNSTABLE'
+        ELSE 'WATCH'
     END AS pipeline_health_status
 FROM ranked_runs AS latest
 INNER JOIN recent_history AS history
