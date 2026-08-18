@@ -21,7 +21,10 @@ def test_azure_package_contains_runtime_and_governed_database(
     source_file.write_text("app = object()\n", encoding="utf-8")
     deployment_directory.mkdir(parents=True)
     (deployment_directory / "requirements.txt").write_text(
-        "fastapi>=0.116,<1.0\nuvicorn>=0.35,<1.0\n",
+        "fastapi>=0.116,<1.0\n"
+        "jinja2>=3.1,<4.0\n"
+        "pydantic-settings>=2.14,<3.0\n"
+        "uvicorn>=0.35,<1.0\n",
         encoding="utf-8",
     )
     (deployment_directory / "startup.sh").write_text(
@@ -60,4 +63,8 @@ def test_azure_package_contains_runtime_and_governed_database(
             archive.read("deployment_manifest.json")
         )
         assert packaged_manifest["database_integrity"] == "ok"
-        assert b"fastapi" in archive.read("requirements.txt")
+        packaged_requirements = archive.read("requirements.txt")
+        assert b"fastapi" in packaged_requirements
+        assert b"jinja2" in packaged_requirements
+        assert b"pydantic-settings" in packaged_requirements
+        assert b"uvicorn" in packaged_requirements
