@@ -271,6 +271,11 @@ def test_dashboard_health_and_static_assets(client: TestClient) -> None:
     assert "Greater Manchester Transport Intelligence" in dashboard.text
     assert '<meta name="author" content="Kamil Ridwan">' in dashboard.text
     assert dashboard.text.count("Designed and modelled by") == 2
+    assert 'id="technology-stack-title"' in dashboard.text
+    assert "Python 3.12 · pandas" in dashboard.text
+    assert "SQL Server · T-SQL" in dashboard.text
+    assert "SQLite · FastAPI" in dashboard.text
+    assert "GitHub · Azure" in dashboard.text
     assert 'href="/static/styles.css"' in dashboard.text
     assert 'src="/static/app.js"' in dashboard.text
     assert stylesheet.status_code == 200
