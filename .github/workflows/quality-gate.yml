@@ -1,0 +1,85 @@
+name: Quality gate
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quality-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Lint, tests and orchestration dry run
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      APP_ENV: ci
+      PYTHONUNBUFFERED: "1"
+      TFGM_GTFS_URL: https://example.invalid/tfgm-gtfs.zip
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            pyproject.toml
+            requirements.txt
+            requirements-dev.txt
+
+      - name: Install project and quality tools
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e . -r requirements-dev.txt
+
+      - name: Run Ruff
+        run: ruff check .
+
+      - name: Run test suite
+        run: pytest -q
+
+      - name: Run orchestration dry run
+        run: |
+          mkdir -p artifacts/quality-gate
+          python -m transport_platform.orchestration.refresh_platform \
+            --dry-run \
+            --skip-package \
+            --manifest artifacts/quality-gate/orchestration_dry_run.json
+
+      - name: Validate orchestration manifest
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          manifest_path = Path(
+              "artifacts/quality-gate/orchestration_dry_run.json"
+          )
+          manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+
+          assert manifest["status"] == "DRY_RUN"
+          assert manifest["dry_run"] is True
+          assert manifest["azure_deployment_performed"] is False
+          assert manifest["stages"] == []
+          assert len(manifest["planned_stages"]) == 16
+
+          print("Orchestration dry run manifest validated")
+          print(f"Run ID: {manifest['run_id']}")
+          print(f"Planned stages: {len(manifest['planned_stages'])}")
+          PY
+
+      - name: Upload orchestration evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: orchestration-dry-run-${{ github.run_id }}
+          path: artifacts/quality-gate/orchestration_dry_run.json
+          if-no-files-found: warn
+          retention-days: 14
