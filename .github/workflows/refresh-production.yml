@@ -1,0 +1,394 @@
+name: Production refresh
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gm-transport-production-refresh
+  cancel-in-progress: false
+
+jobs:
+  refresh-production:
+    name: Refresh TfGM data and deploy
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    environment: production
+
+    env:
+      APP_ENV: production
+      PYTHONUNBUFFERED: "1"
+
+      TFGM_GTFS_URL: ${{ vars.TFGM_GTFS_URL }}
+
+      SQL_SERVER_HOST: ${{ vars.SQL_SERVER_HOST }}
+      SQL_SERVER_PORT: ${{ vars.SQL_SERVER_PORT }}
+      SQL_SERVER_DATABASE: ${{ vars.SQL_SERVER_DATABASE }}
+      SQL_SERVER_USERNAME: ${{ vars.SQL_SERVER_USERNAME }}
+      SQL_SERVER_PASSWORD: ${{ secrets.SQL_SERVER_PASSWORD }}
+      SQL_SERVER_DRIVER: ODBC Driver 18 for SQL Server
+      SQL_SERVER_ENCRYPT: "true"
+      SQL_SERVER_TRUST_CERTIFICATE: "false"
+
+      SERVING_SQLITE_PATH: data/serving/transport_dashboard.db
+
+      AZURE_WEBAPP_NAME: ${{ vars.AZURE_WEBAPP_NAME }}
+      PRODUCTION_BASE_URL: ${{ vars.PRODUCTION_BASE_URL }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            pyproject.toml
+            requirements.txt
+            requirements-dev.txt
+
+      - name: Install Microsoft ODBC Driver 18
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          curl -sSL -O \
+            "https://packages.microsoft.com/config/ubuntu/24.04/packages-microsoft-prod.deb"
+
+          sudo dpkg -i packages-microsoft-prod.deb
+          rm packages-microsoft-prod.deb
+
+          sudo apt-get update
+          sudo ACCEPT_EULA=Y apt-get install -y msodbcsql18 unixodbc-dev
+
+          echo "Installed ODBC drivers:"
+          odbcinst -q -d
+
+      - name: Install project and test tools
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e . -r requirements-dev.txt
+
+      - name: Run Ruff
+        run: ruff check .
+
+      - name: Run test suite
+        run: pytest -q
+
+      - name: Verify Azure SQL connection
+        run: |
+          python - <<'PY'
+          from transport_platform.database.sql_server import connect
+          from transport_platform.settings import get_settings
+
+          settings = get_settings()
+
+          print("Configured SQL host:", settings.sql_server_host)
+          print("Configured database:", settings.sql_server_database)
+
+          with connect() as connection:
+              row = connection.cursor().execute(
+                  """
+                  SELECT
+                      DB_NAME(),
+                      @@SERVERNAME;
+                  """
+              ).fetchone()
+
+          print("Connected database:", row[0])
+          print("Connected server:", row[1])
+
+          assert row[0] == "greater_manchester_transport"
+          assert row[1] == "gb-grid-congestion-kamil"
+
+          print("Azure SQL connection: PASSED")
+          PY
+
+      - name: Run governed production refresh
+        id: refresh
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mkdir -p artifacts/production
+
+          python -m transport_platform.orchestration.refresh_platform \
+            --manifest artifacts/production/refresh_manifest.json
+
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          manifest_path = Path(
+              "artifacts/production/refresh_manifest.json"
+          )
+
+          manifest = json.loads(
+              manifest_path.read_text(encoding="utf-8")
+          )
+
+          status = manifest["status"]
+
+          if status not in {
+              "SUCCEEDED",
+              "SKIPPED_UNCHANGED",
+          }:
+              raise SystemExit(
+                  f"Unexpected orchestration status: {status}"
+              )
+
+          print("Production refresh status:", status)
+          print("Snapshot key:", manifest.get("snapshot_key"))
+          print("Source SHA256:", manifest.get("source_sha256"))
+
+          output_path = Path(os.environ["GITHUB_OUTPUT"])
+
+          with output_path.open("a", encoding="utf-8") as output:
+              print(f"status={status}", file=output)
+              print(
+                  "changed="
+                  + ("true" if status == "SUCCEEDED" else "false"),
+                  file=output,
+              )
+          PY
+
+      - name: Report unchanged publication
+        if: steps.refresh.outputs.changed == 'false'
+        run: |
+          echo "TfGM publication is unchanged."
+          echo "Azure SQL processing and App Service deployment are skipped."
+
+      - name: Verify generated Azure package
+        if: steps.refresh.outputs.changed == 'true'
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          import zipfile
+          from pathlib import Path
+
+          package = Path(
+              "dist/gm_transport_dashboard_azure.zip"
+          )
+          serving_db = Path(
+              "data/serving/transport_dashboard.db"
+          )
+
+          assert package.exists(), "Azure package was not created"
+          assert serving_db.exists(), "Serving database was not created"
+
+          def file_sha256(path: Path) -> str:
+              digest = hashlib.sha256()
+              with path.open("rb") as handle:
+                  for chunk in iter(
+                      lambda: handle.read(1024 * 1024),
+                      b"",
+                  ):
+                      digest.update(chunk)
+              return digest.hexdigest()
+
+          with zipfile.ZipFile(package) as archive:
+              names = set(archive.namelist())
+
+              required = {
+                  "requirements.txt",
+                  "deploy/azure/startup.sh",
+                  "data/serving/transport_dashboard.db",
+                  "deployment_manifest.json",
+              }
+
+              missing = required - names
+              assert not missing, (
+                  f"Package missing required files: {sorted(missing)}"
+              )
+
+              package_manifest = json.loads(
+                  archive.read(
+                      "deployment_manifest.json"
+                  ).decode("utf-8")
+              )
+
+              packaged_db_sha = hashlib.sha256(
+                  archive.read(
+                      "data/serving/transport_dashboard.db"
+                  )
+              ).hexdigest()
+
+          local_db_sha = file_sha256(serving_db)
+
+          assert packaged_db_sha == local_db_sha
+          assert package_manifest["database_integrity"] == "ok"
+          assert str(
+              package_manifest["serving_metadata"]["table_count"]
+          ) == "17"
+
+          print("Package integrity: PASSED")
+          print(
+              "Serving rows:",
+              package_manifest[
+                  "serving_metadata"
+              ]["total_rows"],
+          )
+          print(
+              "Git commit:",
+              package_manifest["git_commit"],
+          )
+          PY
+
+      - name: Smoke test deployment package locally
+        if: steps.refresh.outputs.changed == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          rm -rf /tmp/gm_azure_package_test
+          mkdir -p /tmp/gm_azure_package_test
+
+          unzip -q \
+            dist/gm_transport_dashboard_azure.zip \
+            -d /tmp/gm_azure_package_test
+
+          (
+            cd /tmp/gm_azure_package_test
+            unset SERVING_SQLITE_PATH
+            PORT=8002 bash deploy/azure/startup.sh \
+              > /tmp/gm_package_server.log 2>&1
+          ) &
+
+          PACKAGE_PID=$!
+
+          cleanup() {
+            kill "$PACKAGE_PID" 2>/dev/null || true
+            wait "$PACKAGE_PID" 2>/dev/null || true
+          }
+
+          trap cleanup EXIT
+
+          HEALTHY=false
+
+          for attempt in $(seq 1 30); do
+            if curl \
+              --fail \
+              --silent \
+              http://127.0.0.1:8002/health \
+              > /dev/null; then
+              HEALTHY=true
+              break
+            fi
+
+            sleep 2
+          done
+
+          if [ "$HEALTHY" != "true" ]; then
+            echo "Packaged application failed to become healthy."
+            cat /tmp/gm_package_server.log
+            exit 1
+          fi
+
+          python -m transport_platform.deployment.smoke_test \
+            --base-url http://127.0.0.1:8002 \
+            --timeout 30 \
+            --output artifacts/production/package_smoke.json
+
+      - name: Deploy changed publication to Azure App Service
+        if: steps.refresh.outputs.changed == 'true'
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ vars.AZURE_WEBAPP_NAME }}
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          package: dist/gm_transport_dashboard_azure.zip
+          type: zip
+          clean: true
+          restart: true
+
+      - name: Wait for production health
+        if: steps.refresh.outputs.changed == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          HEALTHY=false
+
+          for attempt in $(seq 1 60); do
+            if curl \
+              --fail \
+              --silent \
+              "${PRODUCTION_BASE_URL}/health" \
+              > /tmp/production_health.json; then
+              HEALTHY=true
+              break
+            fi
+
+            sleep 2
+          done
+
+          if [ "$HEALTHY" != "true" ]; then
+            echo "Production application did not become healthy."
+            exit 1
+          fi
+
+          python -m json.tool /tmp/production_health.json
+
+      - name: Run production smoke test
+        if: steps.refresh.outputs.changed == 'true'
+        run: |
+          python -m transport_platform.deployment.smoke_test \
+            --base-url "${PRODUCTION_BASE_URL}" \
+            --timeout 30 \
+            --output artifacts/production/production_smoke.json
+
+      - name: Record deployment in orchestration evidence
+        if: steps.refresh.outputs.changed == 'true'
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from datetime import UTC, datetime
+          from pathlib import Path
+
+          manifest_path = Path(
+              "artifacts/production/refresh_manifest.json"
+          )
+
+          manifest = json.loads(
+              manifest_path.read_text(encoding="utf-8")
+          )
+
+          manifest["azure_deployment_performed"] = True
+          manifest["azure_webapp_name"] = os.environ[
+              "AZURE_WEBAPP_NAME"
+          ]
+          manifest["production_base_url"] = os.environ[
+              "PRODUCTION_BASE_URL"
+          ]
+          manifest["production_smoke_status"] = "PASSED"
+          manifest["deployment_recorded_at_utc"] = (
+              datetime.now(UTC).isoformat(timespec="milliseconds")
+          )
+
+          manifest_path.write_text(
+              json.dumps(
+                  manifest,
+                  indent=2,
+                  sort_keys=True,
+              )
+              + "\n",
+              encoding="utf-8",
+          )
+
+          print("Production deployment evidence updated")
+          PY
+
+      - name: Upload production evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: production-refresh-${{ github.run_id }}
+          path: artifacts/production/
+          if-no-files-found: warn
+          retention-days: 30
