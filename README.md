@@ -18,7 +18,7 @@ https://gm-transport-intelligence-kamil.azurewebsites.net/
 ---
 
 ## Platform Architecture
-
+## Automated scheduled ingestion of TfGM timetable publications with checksum-based change detection and idempotent processing.
 ```mermaid
 flowchart LR
     A[TfGM GTFS] --> B[GitHub Actions]
