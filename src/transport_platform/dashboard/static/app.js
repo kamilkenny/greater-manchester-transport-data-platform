@@ -1,5 +1,7 @@
 "use strict";
 
+const AUTO_REFRESH_MS = 15 * 60 * 1000;
+
 const state = {
     networkChart: null,
     modeChart: null,
@@ -482,4 +484,10 @@ document.addEventListener("DOMContentLoaded", () => {
         searchTimer = window.setTimeout(() => loadStops().catch((error) => showToast(error.message)), 280);
     });
     loadDashboard();
+
+    window.setInterval(() => {
+        if (document.visibilityState === "visible") {
+            loadDashboard();
+        }
+    }, AUTO_REFRESH_MS);
 });
