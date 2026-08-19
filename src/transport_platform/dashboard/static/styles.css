@@ -366,3 +366,13 @@ footer a { color: var(--yellow); }
     *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
     .reveal { opacity: 1; transform: none; }
 }
+
+
+/* Plain-English guidance for dashboard visuals */
+.visual-explainer {
+    max-width: 72ch;
+    margin: 0.35rem 0 1rem;
+    color: rgba(211, 235, 224, 0.68);
+    font-size: 0.86rem;
+    line-height: 1.55;
+}

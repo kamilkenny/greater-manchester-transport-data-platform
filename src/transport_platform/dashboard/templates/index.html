@@ -164,13 +164,15 @@
             <div class="analytics-grid network-grid">
                 <article class="panel chart-panel span-two">
                     <div class="panel-header">
-                        <div><span class="panel-kicker">Daily schedule</span><h3>Trips and route coverage</h3></div>
+                        <div><span class="panel-kicker">Daily schedule</span><h3>Trips and route coverage</h3>
+<p class="visual-explainer">Shows how many trips are scheduled each day and how many routes are active across the network. Use it to identify busier service periods, quieter periods and changes in overall network coverage.</p></div>
                         <div class="legend"><span class="legend-trips">Trips</span><span class="legend-routes">Routes</span></div>
                     </div>
                     <div class="chart-wrap"><canvas id="network-chart"></canvas></div>
                 </article>
                 <article class="panel mode-panel">
-                    <div class="panel-header"><div><span class="panel-kicker">Mode balance</span><h3>Bus and tram</h3></div></div>
+                    <div class="panel-header"><div><span class="panel-kicker">Mode balance</span><h3>Bus and tram</h3>
+<p class="visual-explainer">Shows how scheduled public transport activity is divided between bus and tram services. It helps stakeholders understand which transport mode contributes most to the published network timetable.</p></div></div>
                     <div class="mode-ring-wrap">
                         <canvas id="mode-chart"></canvas>
                         <div class="mode-ring-centre"><strong id="mode-total">—</strong><span>scheduled trips</span></div>
@@ -204,7 +206,8 @@
             </div>
             <div class="analytics-grid leader-grid">
                 <article class="panel leaderboard-panel span-two">
-                    <div class="panel-header"><div><span class="panel-kicker">Route leaderboard</span><h3>Top scheduled services</h3></div><span class="method-chip">Scheduled, not live</span></div>
+                    <div class="panel-header"><div><span class="panel-kicker">Route leaderboard</span><h3>Top scheduled services</h3>
+<p class="visual-explainer">Ranks routes according to scheduled service intensity, frequency and network coverage. Higher scores indicate stronger planned service provision, but they do not represent live punctuality or passenger demand.</p></div><span class="method-chip">Scheduled, not live</span></div>
                     <div class="table-wrap">
                         <table>
                             <thead><tr><th>Rank</th><th>Route</th><th>Mode</th><th>Service score</th><th>Daily trips</th><th>Headway</th></tr></thead>
@@ -213,7 +216,8 @@
                     </div>
                 </article>
                 <article class="panel insight-panel">
-                    <div class="panel-header"><div><span class="panel-kicker">Leading service</span><h3>Route spotlight</h3></div></div>
+                    <div class="panel-header"><div><span class="panel-kicker">Leading service</span><h3>Route spotlight</h3>
+<p class="visual-explainer">Provides a focused summary of the leading route in the current dashboard selection. It brings together its service score, frequency, typical daily trips and stop coverage for quick comparison.</p></div></div>
                     <div class="route-spotlight">
                         <span id="leading-route-mode" class="route-mode-badge">—</span>
                         <strong id="leading-route">—</strong>
@@ -244,11 +248,13 @@
             </div>
             <div class="analytics-grid place-grid">
                 <article class="panel map-panel span-two">
-                    <div class="panel-header"><div><span class="panel-kicker">Network geography</span><h3>Scheduled activity map</h3></div><span class="method-chip" id="map-count">Loading stops</span></div>
+                    <div class="panel-header"><div><span class="panel-kicker">Network geography</span><h3>Scheduled activity map</h3>
+<p class="visual-explainer">Shows where scheduled public transport activity is concentrated geographically across Greater Manchester. Larger or stronger markers indicate more timetable activity at that location, not actual passenger numbers.</p></div><span class="method-chip" id="map-count">Loading stops</span></div>
                     <div id="network-map" aria-label="Map of scheduled stop activity"></div>
                 </article>
                 <article class="panel stop-panel">
-                    <div class="panel-header"><div><span class="panel-kicker">Hub intelligence</span><h3>Leading stops</h3></div></div>
+                    <div class="panel-header"><div><span class="panel-kicker">Hub intelligence</span><h3>Leading stops</h3>
+<p class="visual-explainer">Ranks stops according to the amount of scheduled service activity associated with them. It helps identify important locations where a high concentration of published services is planned.</p></div></div>
                     <div id="stop-list" class="stop-list"><div class="loading-cell">Loading stops</div></div>
                 </article>
             </div>
@@ -260,11 +266,13 @@
             </div>
             <div class="analytics-grid operator-grid">
                 <article class="panel span-two">
-                    <div class="panel-header"><div><span class="panel-kicker">Published volume</span><h3>Trips by operator</h3></div></div>
+                    <div class="panel-header"><div><span class="panel-kicker">Published volume</span><h3>Trips by operator</h3>
+<p class="visual-explainer">Compares the number of scheduled trips attributed to each transport operator. It shows the relative contribution of each operator to the overall published Greater Manchester network.</p></div></div>
                     <div class="chart-wrap operator-chart-wrap"><canvas id="operator-chart"></canvas></div>
                 </article>
                 <article class="panel accessibility-panel">
-                    <div class="panel-header"><div><span class="panel-kicker">Source completeness</span><h3>Accessibility reporting</h3></div></div>
+                    <div class="panel-header"><div><span class="panel-kicker">Source completeness</span><h3>Accessibility reporting</h3>
+<p class="visual-explainer">Shows how many stops are explicitly recorded as accessible within the published source data. It also highlights locations where accessibility information is unavailable or has not been clearly reported.</p></div></div>
                     <div class="accessibility-visual">
                         <div class="accessibility-number"><strong id="accessible-stops">—</strong><span>stops reported accessible</span></div>
                         <div class="progress-track"><span id="accessibility-progress"></span></div>
@@ -286,11 +294,13 @@
             </div>
             <div class="analytics-grid operations-grid">
                 <article class="panel span-two">
-                    <div class="panel-header"><div><span class="panel-kicker">Pipeline control centre</span><h3>Current health</h3></div><span class="method-chip" id="pipeline-count">— pipelines</span></div>
+                    <div class="panel-header"><div><span class="panel-kicker">Pipeline control centre</span><h3>Current health</h3>
+<p class="visual-explainer">Shows whether the data engineering pipelines completed successfully and whether recent processing was reliable. It helps users judge the freshness and operational trustworthiness of the information displayed on the dashboard.</p></div><span class="method-chip" id="pipeline-count">— pipelines</span></div>
                     <div id="pipeline-grid" class="pipeline-grid"><div class="loading-cell">Loading pipeline health</div></div>
                 </article>
                 <article class="panel publication-panel">
-                    <div class="panel-header"><div><span class="panel-kicker">Publication watch</span><h3>What changed</h3></div></div>
+                    <div class="panel-header"><div><span class="panel-kicker">Publication watch</span><h3>What changed</h3>
+<p class="visual-explainer">Compares the latest TfGM timetable publication with the previous available snapshot. It highlights routes, stops and other network records that have been added, removed or modified between publications.</p></div></div>
                     <div id="publication-content" class="empty-state">
                         <span class="empty-icon">↻</span>
                         <strong>Checking publication history</strong>
@@ -298,7 +308,8 @@
                     </div>
                 </article>
                 <article class="panel quality-panel span-three">
-                    <div class="panel-header"><div><span class="panel-kicker">Data quality register</span><h3>Latest governed checks</h3></div><span class="method-chip" id="quality-total">Loading results</span></div>
+                    <div class="panel-header"><div><span class="panel-kicker">Data quality register</span><h3>Latest governed checks</h3>
+<p class="visual-explainer">Summarises the most recent automated data quality checks performed during pipeline processing. Warnings or failures highlight potential data issues that may require investigation before the information is used for further analysis.</p></div><span class="method-chip" id="quality-total">Loading results</span></div>
                     <div class="quality-layout">
                         <div class="quality-counts">
                             <div class="quality-count pass"><span>Passed</span><strong id="quality-pass">—</strong></div>
