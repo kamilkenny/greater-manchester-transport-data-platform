@@ -1,4 +1,7 @@
 # Greater Manchester Transport Intelligence Platform
+<img width="1672" height="941" alt="GTFS" src="https://github.com/user-attachments/assets/cd2a2c27-71c1-4a8d-81eb-ec4f9dd43357" />
+
+
 
 [![Quality gate](https://github.com/kamilkenny/greater-manchester-transport-data-platform/actions/workflows/quality-gate.yml/badge.svg)](https://github.com/kamilkenny/greater-manchester-transport-data-platform/actions/workflows/quality-gate.yml)
 [![Production refresh](https://github.com/kamilkenny/greater-manchester-transport-data-platform/actions/workflows/refresh-production.yml/badge.svg)](https://github.com/kamilkenny/greater-manchester-transport-data-platform/actions/workflows/refresh-production.yml)
