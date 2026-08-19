@@ -1,0 +1,95 @@
+{
+  "application": "gm-transport-intelligence-kamil",
+  "base_url": "https://gm-transport-intelligence-kamil.azurewebsites.net",
+  "checks": [
+    {
+      "detail": "application and serving database are healthy",
+      "duration_milliseconds": 180,
+      "name": "health",
+      "passed": true,
+      "path": "/health",
+      "status_code": 200
+    },
+    {
+      "detail": "dashboard HTML and creator credit available",
+      "duration_milliseconds": 28,
+      "name": "dashboard",
+      "passed": true,
+      "path": "/",
+      "status_code": 200
+    },
+    {
+      "detail": "stylesheet available, 27104 bytes",
+      "duration_milliseconds": 33,
+      "name": "stylesheet",
+      "passed": true,
+      "path": "/static/styles.css",
+      "status_code": 200
+    },
+    {
+      "detail": "JavaScript available, 21526 bytes",
+      "duration_milliseconds": 21,
+      "name": "javascript",
+      "passed": true,
+      "path": "/static/app.js",
+      "status_code": 200
+    },
+    {
+      "detail": "executive overview contract available",
+      "duration_milliseconds": 20,
+      "name": "overview",
+      "passed": true,
+      "path": "/api/overview",
+      "status_code": 200
+    },
+    {
+      "detail": "received 2 governed records",
+      "duration_milliseconds": 20,
+      "name": "modes",
+      "passed": true,
+      "path": "/api/modes",
+      "status_code": 200
+    },
+    {
+      "detail": "received 3 governed records",
+      "duration_milliseconds": 21,
+      "name": "routes",
+      "passed": true,
+      "path": "/api/routes?limit=3",
+      "status_code": 200
+    },
+    {
+      "detail": "received 100 governed records",
+      "duration_milliseconds": 21,
+      "name": "map_stops",
+      "passed": true,
+      "path": "/api/map-stops?limit=100",
+      "status_code": 200
+    },
+    {
+      "detail": "received 11 pipeline health records",
+      "duration_milliseconds": 22,
+      "name": "pipelines",
+      "passed": true,
+      "path": "/api/pipelines",
+      "status_code": 200
+    },
+    {
+      "detail": "received 0 quality observations",
+      "duration_milliseconds": 24,
+      "name": "data_quality",
+      "passed": true,
+      "path": "/api/data-quality?limit=5",
+      "status_code": 200
+    }
+  ],
+  "completed_at_utc": "2026-08-19T02:29:24.250+00:00",
+  "duration_milliseconds": 630,
+  "started_at_utc": "2026-08-19T02:29:23.620+00:00",
+  "status": "PASSED",
+  "summary": {
+    "failed": 0,
+    "passed": 10,
+    "total": 10
+  }
+}
