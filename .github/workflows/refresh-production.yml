@@ -80,8 +80,17 @@ jobs:
         run: pytest -q
 
       - name: Verify Azure SQL connection
+        shell: bash
         run: |
-          python - <<'PY'
+          set -euo pipefail
+
+          mkdir -p artifacts/production
+
+          python - <<'PYSQL' 2>&1 | tee artifacts/production/sql_preflight.log
+          import time
+
+          import pyodbc
+
           from transport_platform.database.sql_server import connect
           from transport_platform.settings import get_settings
 
@@ -89,15 +98,56 @@ jobs:
 
           print("Configured SQL host:", settings.sql_server_host)
           print("Configured database:", settings.sql_server_database)
+          print(
+              "Azure SQL serverless preflight:"
+              " retry enabled for auto-resume"
+          )
 
-          with connect() as connection:
-              row = connection.cursor().execute(
-                  """
-                  SELECT
-                      DB_NAME(),
-                      @@SERVERNAME;
-                  """
-              ).fetchone()
+          max_attempts = 6
+          retry_seconds = 15
+          row = None
+
+          for attempt in range(1, max_attempts + 1):
+              print(
+                  f"Azure SQL connection attempt "
+                  f"{attempt}/{max_attempts}"
+              )
+
+              try:
+                  with connect() as connection:
+                      row = connection.cursor().execute(
+                          """
+                          SELECT
+                              DB_NAME(),
+                              @@SERVERNAME;
+                          """
+                      ).fetchone()
+
+                  print(
+                      "Azure SQL connection established "
+                      f"on attempt {attempt}"
+                  )
+                  break
+
+              except pyodbc.Error as exc:
+                  print(
+                      "Azure SQL connection attempt "
+                      f"{attempt} failed: {exc}"
+                  )
+
+                  if attempt == max_attempts:
+                      raise
+
+                  print(
+                      f"Waiting {retry_seconds} seconds "
+                      "for Azure SQL auto-resume..."
+                  )
+                  time.sleep(retry_seconds)
+
+          if row is None:
+              raise RuntimeError(
+                  "Azure SQL connection returned no result"
+              )
 
           print("Connected database:", row[0])
           print("Connected server:", row[1])
@@ -106,7 +156,7 @@ jobs:
           assert row[1] == "gb-grid-congestion-kamil"
 
           print("Azure SQL connection: PASSED")
-          PY
+          PYSQL
 
       - name: Run governed production refresh
         id: refresh
