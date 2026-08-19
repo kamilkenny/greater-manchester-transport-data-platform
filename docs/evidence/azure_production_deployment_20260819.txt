@@ -1,0 +1,27 @@
+Greater Manchester Transport Intelligence Platform
+Production Deployment Acceptance
+
+Deployment date: 2026-08-19
+Azure App Service: gm-transport-intelligence-kamil
+Resource group: rg-gm-transport-intelligence
+Region: Germany West Central
+
+Deployment status: RuntimeSuccessful
+Successful instances: 1
+Failed instances: 0
+
+Production URL:
+https://gm-transport-intelligence-kamil.azurewebsites.net
+
+Serving database:
+Integrity: ok
+Schema version: 1
+Analytics tables: 17
+Analytics rows: 203495
+Exported at UTC: 2026-08-19T02:00:37.484+00:00
+
+Production smoke test:
+Passed: 10
+Failed: 0
+Total: 10
+Status: PASSED
