@@ -1,0 +1,200 @@
+name: Production deployment recovery
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gm-transport-production-refresh
+  cancel-in-progress: false
+
+jobs:
+  deploy-production:
+    name: Rebuild serving layer and deploy
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment: production
+
+    env:
+      APP_ENV: production
+      PYTHONUNBUFFERED: "1"
+
+      SQL_SERVER_HOST: ${{ vars.SQL_SERVER_HOST }}
+      SQL_SERVER_PORT: ${{ vars.SQL_SERVER_PORT }}
+      SQL_SERVER_DATABASE: ${{ vars.SQL_SERVER_DATABASE }}
+      SQL_SERVER_USERNAME: ${{ vars.SQL_SERVER_USERNAME }}
+      SQL_SERVER_PASSWORD: ${{ secrets.SQL_SERVER_PASSWORD }}
+      SQL_SERVER_DRIVER: ODBC Driver 18 for SQL Server
+      SQL_SERVER_ENCRYPT: "true"
+      SQL_SERVER_TRUST_CERTIFICATE: "false"
+
+      SERVING_SQLITE_PATH: data/serving/transport_dashboard.db
+
+      AZURE_WEBAPP_NAME: ${{ vars.AZURE_WEBAPP_NAME }}
+      PRODUCTION_BASE_URL: ${{ vars.PRODUCTION_BASE_URL }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install Microsoft ODBC Driver 18
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          curl -sSL -O \
+            "https://packages.microsoft.com/config/ubuntu/24.04/packages-microsoft-prod.deb"
+
+          sudo dpkg -i packages-microsoft-prod.deb
+          rm packages-microsoft-prod.deb
+
+          sudo apt-get update
+          sudo ACCEPT_EULA=Y apt-get install -y msodbcsql18 unixodbc-dev
+
+      - name: Install project
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .
+
+      - name: Verify deployment credential
+        shell: bash
+        env:
+          AZURE_WEBAPP_PUBLISH_PROFILE: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${AZURE_WEBAPP_PUBLISH_PROFILE:-}" ]; then
+            echo "::error::AZURE_WEBAPP_PUBLISH_PROFILE is not configured."
+            exit 1
+          fi
+
+          echo "Azure deployment credential: CONFIGURED"
+
+      - name: Export current Azure SQL analytics and build package
+        run: |
+          python - <<'PYTHON'
+          from pathlib import Path
+
+          from transport_platform.deployment.build_azure_package import build_package
+          from transport_platform.serving.export_analytics import export_analytics
+          from transport_platform.settings import get_settings
+
+          root = Path.cwd()
+          settings = get_settings()
+
+          serving_db = settings.serving_sqlite_path
+          package = root / "dist/gm_transport_dashboard_azure.zip"
+
+          print("Exporting current Azure SQL analytics...")
+          export_result = export_analytics(serving_db)
+          print("Export result:", export_result)
+
+          print("Building Azure deployment package...")
+          package_result = build_package(
+              root,
+              serving_db,
+              package,
+          )
+          print("Package result:", package_result)
+
+          if not serving_db.exists():
+              raise RuntimeError("Serving SQLite database was not created")
+
+          if not package.exists():
+              raise RuntimeError("Azure deployment package was not created")
+
+          print("Serving database:", serving_db)
+          print("Azure package:", package)
+          print("Deployment package preparation: PASSED")
+          PYTHON
+
+      - name: Verify ZIP package
+        run: |
+          python - <<'PYTHON'
+          import zipfile
+          from pathlib import Path
+
+          package = Path("dist/gm_transport_dashboard_azure.zip")
+
+          with zipfile.ZipFile(package) as archive:
+              names = set(archive.namelist())
+
+          required = {
+              "requirements.txt",
+              "deploy/azure/startup.sh",
+              "data/serving/transport_dashboard.db",
+              "deployment_manifest.json",
+          }
+
+          missing = required - names
+
+          if missing:
+              raise RuntimeError(
+                  f"Package missing required files: {sorted(missing)}"
+              )
+
+          print("Azure ZIP package integrity: PASSED")
+          PYTHON
+
+      - name: Deploy to Azure App Service
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ vars.AZURE_WEBAPP_NAME }}
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          package: dist/gm_transport_dashboard_azure.zip
+          type: zip
+          clean: true
+          restart: true
+
+      - name: Wait for production health
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          for attempt in $(seq 1 60); do
+            echo "Production health attempt ${attempt}/60"
+
+            if curl \
+              --fail \
+              --silent \
+              "${PRODUCTION_BASE_URL}/health" \
+              > /tmp/production_health.json; then
+
+              echo "Production application is healthy."
+              python -m json.tool /tmp/production_health.json
+              exit 0
+            fi
+
+            sleep 3
+          done
+
+          echo "Production application did not become healthy."
+          exit 1
+
+      - name: Run production smoke test
+        run: |
+          mkdir -p artifacts/production-recovery
+
+          python -m transport_platform.deployment.smoke_test \
+            --base-url "${PRODUCTION_BASE_URL}" \
+            --timeout 30 \
+            --output artifacts/production-recovery/smoke.json
+
+      - name: Upload recovery evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: production-deployment-recovery-${{ github.run_id }}
+          path: |
+            artifacts/production-recovery/
+            dist/gm_transport_dashboard_azure.zip
+          if-no-files-found: warn
+          retention-days: 7
