@@ -80,6 +80,40 @@ jobs:
 
           echo "Azure deployment credential: CONFIGURED"
 
+      - name: Verify Azure SQL connection
+        run: |
+          python - <<'PYTHON'
+          import time
+
+          from transport_platform.database.sql_server import connect
+          from transport_platform.settings import get_settings
+
+          settings = get_settings()
+
+          for attempt in range(1, 7):
+              try:
+                  print(f"Azure SQL connection attempt {attempt}/6")
+
+                  with connect(settings=settings) as connection:
+                      cursor = connection.cursor()
+                      cursor.execute("SELECT DB_NAME(), @@SERVERNAME")
+                      database_name, server_name = cursor.fetchone()
+
+                  print(f"Connected to database: {database_name}")
+                  print(f"Connected to server: {server_name}")
+                  print("Azure SQL connection: READY")
+                  break
+
+              except Exception as error:
+                  print(f"Connection attempt {attempt}/6 failed: {error}")
+
+                  if attempt == 6:
+                      raise
+
+                  print("Waiting 15 seconds before retry...")
+                  time.sleep(15)
+          PYTHON
+
       - name: Export current Azure SQL analytics and build package
         run: |
           python - <<'PYTHON'
