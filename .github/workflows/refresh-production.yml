@@ -2,6 +2,12 @@ name: Production refresh
 
 on:
   workflow_dispatch:
+    inputs:
+      force_refresh:
+        description: "Reprocess the current TfGM publication and deploy it"
+        required: false
+        default: false
+        type: boolean
   schedule:
     - cron: "30 5 * * *"
 
@@ -160,6 +166,20 @@ jobs:
           print("Azure SQL connection: PASSED")
           PYSQL
 
+      - name: Verify Azure App Service deployment credential
+        shell: bash
+        env:
+          AZURE_WEBAPP_PUBLISH_PROFILE: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${AZURE_WEBAPP_PUBLISH_PROFILE:-}" ]; then
+            echo "::error::AZURE_WEBAPP_PUBLISH_PROFILE is not configured."
+            exit 1
+          fi
+
+          echo "Azure App Service deployment credential: CONFIGURED"
+
       - name: Run governed production refresh
         id: refresh
         shell: bash
@@ -168,8 +188,18 @@ jobs:
 
           mkdir -p artifacts/production
 
-          python -m transport_platform.orchestration.refresh_platform \
+          REFRESH_ARGS=(
             --manifest artifacts/production/refresh_manifest.json
+          )
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && \
+             [ "${{ inputs.force_refresh }}" = "true" ]; then
+            echo "Manual force refresh requested."
+            REFRESH_ARGS+=(--force)
+          fi
+
+          python -m transport_platform.orchestration.refresh_platform \
+            "${REFRESH_ARGS[@]}"
 
           python - <<'PY'
           import json
