@@ -21,6 +21,8 @@ jobs:
       APP_ENV: production
       PYTHONUNBUFFERED: "1"
 
+      TFGM_GTFS_URL: ${{ vars.TFGM_GTFS_URL }}
+
       SQL_SERVER_HOST: ${{ vars.SQL_SERVER_HOST }}
       SQL_SERVER_PORT: ${{ vars.SQL_SERVER_PORT }}
       SQL_SERVER_DATABASE: ${{ vars.SQL_SERVER_DATABASE }}
