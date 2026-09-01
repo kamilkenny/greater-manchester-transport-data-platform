@@ -308,7 +308,34 @@ function renderMap(rows) {
         marker.addTo(state.markers);
         bounds.push([latitude, longitude]);
     });
-    if (bounds.length) state.map.fitBounds(bounds, { padding: [24, 24], maxZoom: 12 });
+    state.mapBounds = bounds;
+
+    const refreshMapLayout = () => {
+        if (!state.map) return;
+
+        state.map.invalidateSize({
+            animate: false,
+            pan: false,
+        });
+
+        if (state.mapBounds.length) {
+            state.map.fitBounds(state.mapBounds, {
+                padding: [24, 24],
+                maxZoom: 12,
+            });
+        }
+    };
+
+    refreshMapLayout();
+    window.setTimeout(refreshMapLayout, 250);
+    window.setTimeout(refreshMapLayout, 800);
+
+    if (!state.mapResizeBound) {
+        window.addEventListener("resize", () => {
+            window.setTimeout(refreshMapLayout, 150);
+        });
+        state.mapResizeBound = true;
+    }
 }
 
 function renderOperators(rows) {
