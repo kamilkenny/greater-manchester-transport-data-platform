@@ -283,8 +283,8 @@ function renderMap(rows) {
     if (!state.map) {
         state.map = L.map("network-map", { zoomControl: false, preferCanvas: true }).setView([53.48, -2.24], 10);
         L.control.zoom({ position: "bottomright" }).addTo(state.map);
-        L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
-            attribution: "&copy; OpenStreetMap contributors &copy; CARTO",
+        L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+            attribution: "&copy; OpenStreetMap contributors",
             maxZoom: 19,
         }).addTo(state.map);
         state.markers = L.layerGroup().addTo(state.map);
