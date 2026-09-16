@@ -1,0 +1,116 @@
+name: Diagnose snapshot retention
+
+on:
+  workflow_dispatch:
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    environment: production
+
+    env:
+      SQL_SERVER_HOST: ${{ vars.SQL_SERVER_HOST }}
+      SQL_SERVER_PORT: ${{ vars.SQL_SERVER_PORT }}
+      SQL_SERVER_DATABASE: ${{ vars.SQL_SERVER_DATABASE }}
+      SQL_SERVER_USERNAME: ${{ vars.SQL_SERVER_USERNAME }}
+      SQL_SERVER_PASSWORD: ${{ secrets.SQL_SERVER_PASSWORD }}
+
+    steps:
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install SQL dependencies
+        run: |
+          curl https://packages.microsoft.com/keys/microsoft.asc \
+            | sudo gpg --dearmor \
+            -o /usr/share/keyrings/microsoft-prod.gpg
+
+          echo "deb [arch=amd64 signed-by=/usr/share/keyrings/microsoft-prod.gpg] https://packages.microsoft.com/ubuntu/24.04/prod noble main" \
+            | sudo tee /etc/apt/sources.list.d/mssql-release.list
+
+          sudo apt-get update
+          sudo ACCEPT_EULA=Y apt-get install -y msodbcsql18
+          python -m pip install pyodbc
+
+      - name: Analyse snapshot retention
+        run: |
+          python - <<'PY'
+          import os
+          import time
+          import pyodbc
+
+          connection_string = (
+              "DRIVER={ODBC Driver 18 for SQL Server};"
+              f"SERVER={os.environ['SQL_SERVER_HOST']},{os.environ['SQL_SERVER_PORT']};"
+              f"DATABASE={os.environ['SQL_SERVER_DATABASE']};"
+              f"UID={os.environ['SQL_SERVER_USERNAME']};"
+              f"PWD={os.environ['SQL_SERVER_PASSWORD']};"
+              "Encrypt=yes;"
+              "TrustServerCertificate=no;"
+              "Connection Timeout=30;"
+          )
+
+          conn = None
+
+          for attempt in range(1, 6):
+              try:
+                  print(f"Connection attempt {attempt}...")
+                  conn = pyodbc.connect(connection_string)
+                  print("Connected successfully.")
+                  break
+              except pyodbc.Error as exc:
+                  print(f"Connection attempt {attempt} failed: {exc}")
+                  if attempt == 5:
+                      raise
+                  time.sleep(20)
+
+          cursor = conn.cursor()
+
+          print("\n=== SNAPSHOTS ===")
+          cursor.execute("""
+              SELECT
+                  snapshot_key,
+                  downloaded_at_utc,
+                  source_filename,
+                  is_loaded
+              FROM governance.source_snapshot
+              ORDER BY snapshot_key DESC;
+          """)
+
+          for row in cursor.fetchall():
+              print(row)
+
+          print("\n=== ROWS BY SNAPSHOT ===")
+
+          tables = [
+              "warehouse.fact_stop_service_day",
+              "warehouse.fact_scheduled_stop_event",
+              "warehouse.shape_point",
+              "warehouse.fact_route_service_day",
+              "warehouse.bridge_service_date",
+              "warehouse.dim_trip"
+          ]
+
+          for table in tables:
+              print(f"\n{table}")
+              cursor.execute(f"""
+                  SELECT
+                      snapshot_key,
+                      COUNT_BIG(*) AS row_count
+                  FROM {table}
+                  GROUP BY snapshot_key
+                  ORDER BY snapshot_key DESC;
+              """)
+
+              for snapshot_key, row_count in cursor.fetchall():
+                  print(
+                      f"snapshot={snapshot_key:<8} "
+                      f"rows={int(row_count):>15,}"
+                  )
+
+          cursor.close()
+          conn.close()
+          PY
+cat >> .github/workflows/diagnose-snapshot-retention.yml <<'YAML'
