@@ -72,10 +72,7 @@ jobs:
 
           cursor.execute("""
               SELECT
-                  snapshot_key,
-                  downloaded_at_utc,
-                  source_filename,
-                  is_loaded
+                  snapshot_key
               FROM governance.source_snapshot
               ORDER BY snapshot_key DESC;
           """)
