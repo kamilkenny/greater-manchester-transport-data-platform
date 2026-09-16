@@ -21,7 +21,7 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install SQL dependencies
+      - name: Install Microsoft ODBC Driver
         run: |
           curl https://packages.microsoft.com/keys/microsoft.asc \
             | sudo gpg --dearmor \
@@ -69,6 +69,7 @@ jobs:
           cursor = conn.cursor()
 
           print("\n=== SNAPSHOTS ===")
+
           cursor.execute("""
               SELECT
                   snapshot_key,
@@ -90,11 +91,12 @@ jobs:
               "warehouse.shape_point",
               "warehouse.fact_route_service_day",
               "warehouse.bridge_service_date",
-              "warehouse.dim_trip"
+              "warehouse.dim_trip",
           ]
 
           for table in tables:
               print(f"\n{table}")
+
               cursor.execute(f"""
                   SELECT
                       snapshot_key,
@@ -113,4 +115,3 @@ jobs:
           cursor.close()
           conn.close()
           PY
-cat >> .github/workflows/diagnose-snapshot-retention.yml <<'YAML'
