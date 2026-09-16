@@ -1,0 +1,175 @@
+name: Cleanup transport SQL storage
+
+on:
+  workflow_dispatch:
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    environment: production
+
+    env:
+      SQL_SERVER_HOST: ${{ vars.SQL_SERVER_HOST }}
+      SQL_SERVER_PORT: ${{ vars.SQL_SERVER_PORT }}
+      SQL_SERVER_DATABASE: ${{ vars.SQL_SERVER_DATABASE }}
+      SQL_SERVER_USERNAME: ${{ vars.SQL_SERVER_USERNAME }}
+      SQL_SERVER_PASSWORD: ${{ secrets.SQL_SERVER_PASSWORD }}
+
+    steps:
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Microsoft ODBC Driver
+        run: |
+          curl https://packages.microsoft.com/keys/microsoft.asc \
+            | sudo gpg --batch --yes --dearmor \
+            -o /usr/share/keyrings/microsoft-prod.gpg
+
+          echo "deb [arch=amd64 signed-by=/usr/share/keyrings/microsoft-prod.gpg] https://packages.microsoft.com/ubuntu/24.04/prod noble main" \
+            | sudo tee /etc/apt/sources.list.d/mssql-release.list
+
+          sudo apt-get update
+          sudo ACCEPT_EULA=Y apt-get install -y msodbcsql18
+          python -m pip install pyodbc
+
+      - name: Remove old materialised warehouse snapshots
+        run: |
+          python - <<'PY'
+          import os
+          import time
+          import pyodbc
+
+          connection_string = (
+              "DRIVER={ODBC Driver 18 for SQL Server};"
+              f"SERVER={os.environ['SQL_SERVER_HOST']},{os.environ['SQL_SERVER_PORT']};"
+              f"DATABASE={os.environ['SQL_SERVER_DATABASE']};"
+              f"UID={os.environ['SQL_SERVER_USERNAME']};"
+              f"PWD={os.environ['SQL_SERVER_PASSWORD']};"
+              "Encrypt=yes;"
+              "TrustServerCertificate=no;"
+              "Connection Timeout=30;"
+          )
+
+          conn = None
+
+          for attempt in range(1, 6):
+              try:
+                  print(f"Connection attempt {attempt}...")
+                  conn = pyodbc.connect(connection_string)
+                  conn.autocommit = False
+                  print("Connected successfully.")
+                  break
+              except pyodbc.Error as exc:
+                  print(f"Connection attempt {attempt} failed: {exc}")
+                  if attempt == 5:
+                      raise
+                  time.sleep(20)
+
+          cursor = conn.cursor()
+
+          # Keep the latest two complete analytical snapshots.
+          keep_snapshots = (10, 11)
+
+          # Delete in dependency-safe order.
+          tables = [
+              "warehouse.fact_stop_service_day",
+              "warehouse.fact_route_service_day",
+              "warehouse.fact_scheduled_stop_event",
+              "warehouse.shape_point",
+              "warehouse.bridge_service_date",
+          ]
+
+          batch_size = 100000
+
+          print("\nKeeping warehouse snapshots:", keep_snapshots)
+          print("Removing materialised rows for other snapshots up to snapshot 12.")
+
+          for table in tables:
+              print(f"\n=== CLEANING {table} ===")
+
+              total_deleted = 0
+              batch_number = 0
+
+              while True:
+                  sql = f"""
+                      DELETE TOP ({batch_size})
+                      FROM {table}
+                      WHERE snapshot_key <= 12
+                        AND snapshot_key NOT IN (10, 11);
+                  """
+
+                  cursor.execute(sql)
+                  deleted = cursor.rowcount
+                  conn.commit()
+
+                  if deleted <= 0:
+                      break
+
+                  total_deleted += deleted
+                  batch_number += 1
+
+                  print(
+                      f"{table}: batch={batch_number}, "
+                      f"deleted={deleted:,}, "
+                      f"total_deleted={total_deleted:,}"
+                  )
+
+              print(
+                  f"Completed {table}: "
+                  f"{total_deleted:,} rows deleted."
+              )
+
+          print("\n=== REMAINING ROWS BY SNAPSHOT ===")
+
+          for table in tables:
+              print(f"\n{table}")
+
+              cursor.execute(f"""
+                  SELECT snapshot_key, COUNT_BIG(*)
+                  FROM {table}
+                  GROUP BY snapshot_key
+                  ORDER BY snapshot_key;
+              """)
+
+              for snapshot_key, row_count in cursor.fetchall():
+                  print(
+                      f"snapshot={snapshot_key:<8} "
+                      f"rows={int(row_count):>15,}"
+                  )
+
+          print("\n=== DATABASE FILE SPACE AFTER CLEANUP ===")
+
+          cursor.execute("""
+              SELECT
+                  name,
+                  type_desc,
+                  CAST(size * 8.0 / 1024 AS DECIMAL(18,2)),
+                  CAST(
+                      FILEPROPERTY(name, 'SpaceUsed') * 8.0 / 1024
+                      AS DECIMAL(18,2)
+                  ),
+                  CAST(
+                      (size - FILEPROPERTY(name, 'SpaceUsed'))
+                      * 8.0 / 1024
+                      AS DECIMAL(18,2)
+                  )
+              FROM sys.database_files
+              ORDER BY type_desc, name;
+          """)
+
+          for row in cursor.fetchall():
+              print(
+                  f"{row[0]:<25} "
+                  f"{row[1]:<12} "
+                  f"allocated_mb={float(row[2] or 0):>12,.2f} "
+                  f"used_mb={float(row[3] or 0):>12,.2f} "
+                  f"free_mb={float(row[4] or 0):>12,.2f}"
+              )
+
+          cursor.close()
+          conn.close()
+
+          print("\nCleanup completed successfully.")
+          PY
