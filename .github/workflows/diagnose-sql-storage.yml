@@ -1,0 +1,168 @@
+name: Diagnose Azure SQL storage
+
+on:
+  workflow_dispatch:
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    environment: production
+
+    env:
+      SQL_SERVER_HOST: ${{ vars.SQL_SERVER_HOST }}
+      SQL_SERVER_PORT: ${{ vars.SQL_SERVER_PORT }}
+      SQL_SERVER_DATABASE: ${{ vars.SQL_SERVER_DATABASE }}
+      SQL_SERVER_USERNAME: ${{ vars.SQL_SERVER_USERNAME }}
+      SQL_SERVER_PASSWORD: ${{ secrets.SQL_SERVER_PASSWORD }}
+      SQL_SERVER_DRIVER: ODBC Driver 18 for SQL Server
+      SQL_SERVER_ENCRYPT: "true"
+      SQL_SERVER_TRUST_CERTIFICATE: "false"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install ODBC driver and pyodbc
+        run: |
+          sudo apt-get update
+          sudo ACCEPT_EULA=Y apt-get install -y msodbcsql18 unixodbc-dev
+          python -m pip install --upgrade pip
+          python -m pip install pyodbc
+
+      - name: Diagnose database storage
+        shell: bash
+        run: |
+          python - <<'PY'
+          import os
+          import time
+          import pyodbc
+
+          server = f"{os.environ['SQL_SERVER_HOST']},{os.environ['SQL_SERVER_PORT']}"
+
+          connection_string = (
+              "DRIVER={ODBC Driver 18 for SQL Server};"
+              f"SERVER={server};"
+              f"DATABASE={os.environ['SQL_SERVER_DATABASE']};"
+              f"UID={os.environ['SQL_SERVER_USERNAME']};"
+              f"PWD={os.environ['SQL_SERVER_PASSWORD']};"
+              "Encrypt=yes;"
+              "TrustServerCertificate=no;"
+              "Connection Timeout=60;"
+          )
+
+          conn = None
+
+          for attempt in range(1, 6):
+              try:
+                  print(f"Connection attempt {attempt}...")
+                  conn = pyodbc.connect(connection_string)
+                  print("Connected successfully.")
+                  break
+              except pyodbc.Error as exc:
+                  print(f"Connection attempt {attempt} failed: {exc}")
+                  if attempt == 5:
+                      raise
+                  time.sleep(30)
+
+          cursor = conn.cursor()
+
+          print("\n=== DATABASE FILE SPACE ===")
+
+          cursor.execute("""
+              SELECT
+                  name,
+                  type_desc,
+                  CAST(size * 8.0 / 1024 AS DECIMAL(18,2)) AS allocated_mb,
+                  CAST(FILEPROPERTY(name, 'SpaceUsed') * 8.0 / 1024
+                       AS DECIMAL(18,2)) AS used_mb,
+                  CAST(
+                      (size - FILEPROPERTY(name, 'SpaceUsed')) * 8.0 / 1024
+                      AS DECIMAL(18,2)
+                  ) AS free_inside_file_mb
+              FROM sys.database_files
+              ORDER BY type_desc, name;
+          """)
+
+          print(
+              f"{'File':<30}"
+              f"{'Type':<12}"
+              f"{'Allocated MB':>15}"
+              f"{'Used MB':>15}"
+              f"{'Free MB':>15}"
+          )
+
+          for row in cursor.fetchall():
+              print(
+                  f"{row[0]:<30}"
+                  f"{row[1]:<12}"
+                  f"{float(row[2]):>15,.2f}"
+                  f"{float(row[3]):>15,.2f}"
+                  f"{float(row[4]):>15,.2f}"
+              )
+
+          print("\n=== LARGEST TABLES ===")
+
+          cursor.execute("""
+              SELECT
+                  s.name AS schema_name,
+                  t.name AS table_name,
+                  SUM(p.rows) AS row_count,
+                  CAST(
+                      SUM(a.total_pages) * 8.0 / 1024
+                      AS DECIMAL(18,2)
+                  ) AS total_mb,
+                  CAST(
+                      SUM(a.used_pages) * 8.0 / 1024
+                      AS DECIMAL(18,2)
+                  ) AS used_mb,
+                  CAST(
+                      SUM(
+                          CASE
+                              WHEN i.index_id IN (0,1)
+                              THEN a.data_pages
+                              ELSE 0
+                          END
+                      ) * 8.0 / 1024
+                      AS DECIMAL(18,2)
+                  ) AS data_mb
+              FROM sys.tables t
+              JOIN sys.schemas s
+                ON t.schema_id = s.schema_id
+              JOIN sys.indexes i
+                ON t.object_id = i.object_id
+              JOIN sys.partitions p
+                ON i.object_id = p.object_id
+               AND i.index_id = p.index_id
+              JOIN sys.allocation_units a
+                ON p.partition_id = a.container_id
+              GROUP BY s.name, t.name
+              ORDER BY SUM(a.total_pages) DESC;
+          """)
+
+          print(
+              f"{'Schema':<18}"
+              f"{'Table':<42}"
+              f"{'Rows':>15}"
+              f"{'Total MB':>15}"
+              f"{'Used MB':>15}"
+              f"{'Data MB':>15}"
+          )
+
+          for row in cursor.fetchall():
+              print(
+                  f"{row[0]:<18}"
+                  f"{row[1]:<42}"
+                  f"{int(row[2]):>15,}"
+                  f"{float(row[3]):>15,.2f}"
+                  f"{float(row[4]):>15,.2f}"
+                  f"{float(row[5]):>15,.2f}"
+              )
+
+          cursor.close()
+          conn.close()
+          PY
