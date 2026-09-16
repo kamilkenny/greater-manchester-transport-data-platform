@@ -100,9 +100,9 @@ jobs:
               print(
                   f"{row[0]:<30}"
                   f"{row[1]:<12}"
-                  f"{float(row[2]):>15,.2f}"
-                  f"{float(row[3]):>15,.2f}"
-                  f"{float(row[4]):>15,.2f}"
+                  f"{float(row[2] or 0):>15,.2f}"
+                  f"{float(row[3] or 0):>15,.2f}"
+                  f"{float(row[4] or 0):>15,.2f}"
               )
 
           print("\n=== LARGEST TABLES ===")
@@ -158,9 +158,9 @@ jobs:
                   f"{row[0]:<18}"
                   f"{row[1]:<42}"
                   f"{int(row[2]):>15,}"
-                  f"{float(row[3]):>15,.2f}"
-                  f"{float(row[4]):>15,.2f}"
-                  f"{float(row[5]):>15,.2f}"
+                  f"{float(row[3] or 0):>15,.2f}"
+                  f"{float(row[4] or 0):>15,.2f}"
+                  f"{float(row[5] or 0):>15,.2f}"
               )
 
           cursor.close()
