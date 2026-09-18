@@ -104,6 +104,48 @@ The processing design supports reproducibility, publication lineage, controlled 
 | **Fabric** | Orchestrate governed datasets, Lakehouse ingestion, validation and monitoring |
 
 ---
+## Automated Warehouse Snapshot Retention
+
+The platform includes an automated snapshot retention process to prevent high-volume analytical tables from consuming unnecessary Azure SQL Database storage.
+
+### Why snapshot retention is required
+
+Each successful transport data refresh can create a new analytical snapshot containing several million rows. Keeping every historical copy of these large warehouse tables would cause database storage to grow continuously.
+
+The platform therefore keeps the **latest two complete analytical snapshots** in the largest materialised warehouse tables.
+
+This provides:
+
+- the latest trusted transport dataset for reporting and analytics
+- one previous complete snapshot for comparison and operational recovery
+- controlled Azure SQL storage consumption
+- preserved governance and pipeline history for auditing
+- automatic cleanup without requiring regular manual intervention
+
+### Retention architecture
+
+```text
+Production refresh
+        |
+        v
+Successful analytical snapshot
+        |
+        v
+GitHub Actions workflow_run trigger
+        |
+        v
+Identify latest two complete snapshots
+        |
+        v
+Retain current + previous snapshot
+        |
+        v
+Delete older rows from high-volume tables
+        |
+        v
+Report remaining snapshots and database space
+
+
 
 ## Automated Production Refresh
 
