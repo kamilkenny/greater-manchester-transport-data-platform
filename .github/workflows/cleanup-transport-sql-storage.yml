@@ -2,10 +2,21 @@ name: Cleanup transport SQL storage
 
 on:
   workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Show what would be deleted without deleting rows"
+        required: true
+        default: true
+        type: boolean
+
+concurrency:
+  group: gm-transport-production-refresh
+  cancel-in-progress: false
 
 jobs:
   cleanup:
     runs-on: ubuntu-latest
+    timeout-minutes: 240
     environment: production
 
     env:
@@ -14,6 +25,7 @@ jobs:
       SQL_SERVER_DATABASE: ${{ vars.SQL_SERVER_DATABASE }}
       SQL_SERVER_USERNAME: ${{ vars.SQL_SERVER_USERNAME }}
       SQL_SERVER_PASSWORD: ${{ secrets.SQL_SERVER_PASSWORD }}
+      DRY_RUN: ${{ inputs.dry_run }}
 
     steps:
       - name: Set up Python
@@ -34,12 +46,14 @@ jobs:
           sudo ACCEPT_EULA=Y apt-get install -y msodbcsql18
           python -m pip install pyodbc
 
-      - name: Remove old materialised warehouse snapshots
+      - name: Retain latest two complete warehouse snapshots
         run: |
           python - <<'PY'
           import os
           import time
           import pyodbc
+
+          dry_run = os.environ.get("DRY_RUN", "false").lower() == "true"
 
           connection_string = (
               "DRIVER={ODBC Driver 18 for SQL Server};"
@@ -69,10 +83,36 @@ jobs:
 
           cursor = conn.cursor()
 
-          # Keep the latest two complete analytical snapshots.
-          keep_snapshots = (10, 11)
+          # A complete snapshot is one whose governed serving export succeeded.
+          cursor.execute("""
+              SELECT TOP (2)
+                  snapshot_key
+              FROM governance.pipeline_run
+              WHERE pipeline_name = 'export_gtfs_analytics_sqlite'
+                AND run_status = 'SUCCEEDED'
+                AND snapshot_key IS NOT NULL
+              GROUP BY snapshot_key
+              ORDER BY snapshot_key DESC;
+          """)
 
-          # Delete in dependency-safe order.
+          keep_snapshots = tuple(
+              int(row[0]) for row in cursor.fetchall()
+          )
+
+          if len(keep_snapshots) < 2:
+              raise RuntimeError(
+                  "Fewer than two complete analytical snapshots exist. "
+                  "Cleanup has been stopped for safety."
+              )
+
+          newest_complete = max(keep_snapshots)
+
+          print("\nLatest complete snapshots:", keep_snapshots)
+          print("Newest complete snapshot:", newest_complete)
+          print("Dry run:", dry_run)
+
+          # Large materialised tables only.
+          # dim_trip and governance history are deliberately retained.
           tables = [
               "warehouse.fact_stop_service_day",
               "warehouse.fact_route_service_day",
@@ -81,10 +121,47 @@ jobs:
               "warehouse.bridge_service_date",
           ]
 
-          batch_size = 100000
+          placeholders = ", ".join("?" for _ in keep_snapshots)
 
-          print("\nKeeping warehouse snapshots:", keep_snapshots)
-          print("Removing materialised rows for other snapshots up to snapshot 12.")
+          print("\n=== RETENTION PLAN ===")
+
+          for table in tables:
+              cursor.execute(
+                  f"""
+                  SELECT
+                      snapshot_key,
+                      COUNT_BIG(*) AS row_count
+                  FROM {table}
+                  WHERE snapshot_key <= ?
+                    AND snapshot_key NOT IN ({placeholders})
+                  GROUP BY snapshot_key
+                  ORDER BY snapshot_key;
+                  """,
+                  newest_complete,
+                  *keep_snapshots,
+              )
+
+              rows = cursor.fetchall()
+
+              print(f"\n{table}")
+
+              if not rows:
+                  print("No old materialised snapshots to remove.")
+                  continue
+
+              for snapshot_key, row_count in rows:
+                  print(
+                      f"would_remove_snapshot={snapshot_key} "
+                      f"rows={int(row_count):,}"
+                  )
+
+          if dry_run:
+              cursor.close()
+              conn.close()
+              print("\nDRY RUN complete. No rows were deleted.")
+              raise SystemExit(0)
+
+          batch_size = 100000
 
           for table in tables:
               print(f"\n=== CLEANING {table} ===")
@@ -96,11 +173,16 @@ jobs:
                   sql = f"""
                       DELETE TOP ({batch_size})
                       FROM {table}
-                      WHERE snapshot_key <= 12
-                        AND snapshot_key NOT IN (10, 11);
+                      WHERE snapshot_key <= ?
+                        AND snapshot_key NOT IN ({placeholders});
                   """
 
-                  cursor.execute(sql)
+                  cursor.execute(
+                      sql,
+                      newest_complete,
+                      *keep_snapshots,
+                  )
+
                   deleted = cursor.rowcount
                   conn.commit()
 
@@ -111,7 +193,8 @@ jobs:
                   batch_number += 1
 
                   print(
-                      f"{table}: batch={batch_number}, "
+                      f"{table}: "
+                      f"batch={batch_number}, "
                       f"deleted={deleted:,}, "
                       f"total_deleted={total_deleted:,}"
                   )
@@ -121,16 +204,18 @@ jobs:
                   f"{total_deleted:,} rows deleted."
               )
 
-          print("\n=== REMAINING ROWS BY SNAPSHOT ===")
+          print("\n=== REMAINING MATERIALISED SNAPSHOTS ===")
 
           for table in tables:
               print(f"\n{table}")
 
               cursor.execute(f"""
-                  SELECT snapshot_key, COUNT_BIG(*)
+                  SELECT
+                      snapshot_key,
+                      COUNT_BIG(*)
                   FROM {table}
                   GROUP BY snapshot_key
-                  ORDER BY snapshot_key;
+                  ORDER BY snapshot_key DESC;
               """)
 
               for snapshot_key, row_count in cursor.fetchall():
@@ -139,7 +224,7 @@ jobs:
                       f"rows={int(row_count):>15,}"
                   )
 
-          print("\n=== DATABASE FILE SPACE AFTER CLEANUP ===")
+          print("\n=== DATABASE FILE SPACE ===")
 
           cursor.execute("""
               SELECT
@@ -147,12 +232,15 @@ jobs:
                   type_desc,
                   CAST(size * 8.0 / 1024 AS DECIMAL(18,2)),
                   CAST(
-                      FILEPROPERTY(name, 'SpaceUsed') * 8.0 / 1024
+                      FILEPROPERTY(name, 'SpaceUsed')
+                      * 8.0 / 1024
                       AS DECIMAL(18,2)
                   ),
                   CAST(
-                      (size - FILEPROPERTY(name, 'SpaceUsed'))
-                      * 8.0 / 1024
+                      (
+                          size -
+                          FILEPROPERTY(name, 'SpaceUsed')
+                      ) * 8.0 / 1024
                       AS DECIMAL(18,2)
                   )
               FROM sys.database_files
@@ -171,5 +259,5 @@ jobs:
           cursor.close()
           conn.close()
 
-          print("\nCleanup completed successfully.")
+          print("\nSnapshot retention completed successfully.")
           PY
