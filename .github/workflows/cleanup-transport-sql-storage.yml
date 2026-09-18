@@ -9,22 +9,12 @@ on:
         default: true
         type: boolean
 
-  workflow_run:
-    workflows:
-      - Production refresh
-    types:
-      - completed
-
 concurrency:
   group: gm-transport-production-refresh
   cancel-in-progress: false
 
 jobs:
   cleanup:
-    if: >
-      github.event_name == 'workflow_dispatch' ||
-      github.event.workflow_run.conclusion == 'success'
-
     runs-on: ubuntu-latest
     timeout-minutes: 240
     environment: production
@@ -35,7 +25,7 @@ jobs:
       SQL_SERVER_DATABASE: ${{ vars.SQL_SERVER_DATABASE }}
       SQL_SERVER_USERNAME: ${{ vars.SQL_SERVER_USERNAME }}
       SQL_SERVER_PASSWORD: ${{ secrets.SQL_SERVER_PASSWORD }}
-      DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || false }}
+      DRY_RUN: ${{ inputs.dry_run }}
 
     steps:
       - name: Set up Python
